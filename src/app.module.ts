@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CurrencyModule } from './currency/currency.module';
+import { RateModule } from './rate/rate.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CurrencyModule } from './currency/currency.module';
       }),
     }),
     CurrencyModule,
+    RateModule,
   ],
   controllers: [AppController],
   providers: [AppService],

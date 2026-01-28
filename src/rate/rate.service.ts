@@ -1,0 +1,150 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+
+import { CURRENCY_API_CLIENT } from '../currency/currency.constants';
+import type { CurrencyApiClient } from '../currency/currency.types';
+
+import { Rate, RateDocument } from './rate.schema';
+import { CreateRateDto, UpdateRateDto } from './rate.dto';
+import { RateType } from './rate.types';
+import { RATES_TTL_MS } from './rate.constants';
+
+@Injectable()
+export class RateService {
+  constructor(
+    @InjectModel(Rate.name)
+    private readonly rateModel: Model<RateDocument>,
+
+    @Inject(CURRENCY_API_CLIENT)
+    private readonly currencyClient: CurrencyApiClient,
+  ) {}
+
+  async create(createRateDto: CreateRateDto): Promise<Rate> {
+    const createdRate = new this.rateModel(createRateDto);
+    return createdRate.save();
+  }
+
+  async findAll(): Promise<Rate[]> {
+    return this.rateModel.find().exec();
+  }
+
+  async findOne(id: string): Promise<Rate> {
+    const rate = await this.rateModel.findById(id).exec();
+    if (!rate) {
+      throw new Error('Rate not found');
+    }
+
+    const updatedAt = rate.updatedAt;
+    if (
+      updatedAt &&
+      Date.now() - new Date(updatedAt).getTime() > RATES_TTL_MS
+    ) {
+      await this.fetchAndUpdateRates();
+      return this.findOne(id);
+    }
+
+    return rate;
+  }
+
+  async findByCode(code: string): Promise<Rate | null> {
+    const rate = await this.rateModel.findOne({ code }).exec();
+    if (!rate) {
+      throw new Error('Rate not found');
+    }
+
+    const updatedAt = rate.updatedAt;
+    if (
+      updatedAt &&
+      Date.now() - new Date(updatedAt).getTime() > RATES_TTL_MS
+    ) {
+      await this.fetchAndUpdateRates();
+      return this.findByCode(code);
+    }
+
+    return rate;
+  }
+
+  async update(id: string, updateRateDto: UpdateRateDto): Promise<Rate> {
+    const rate = await this.rateModel
+      .findByIdAndUpdate(id, updateRateDto, { new: true })
+      .exec();
+    if (!rate) {
+      throw new Error('Rate not found');
+    }
+    return rate;
+  }
+
+  async remove(id: string): Promise<Rate> {
+    const rate = await this.rateModel.findByIdAndDelete(id).exec();
+    if (!rate) {
+      throw new Error('Rate not found');
+    }
+    return rate;
+  }
+
+  /**
+   * Get the latest updated rate from database
+   */
+  async getLatestUpdatedRate(): Promise<Rate | null> {
+    const result = await this.rateModel
+      .findOne()
+      .sort({ updatedAt: -1 })
+      .lean()
+      .exec();
+    return result;
+  }
+
+  /**
+   * Update multiple rates using bulk write operation
+   */
+  async updateManyRates(rates: RateType[]): Promise<void> {
+    const operations = rates.map((rate) => ({
+      updateOne: {
+        filter: { code: rate.code },
+        update: { $set: rate },
+        upsert: true,
+      },
+    }));
+
+    await this.rateModel.bulkWrite(operations, {
+      ordered: false,
+    });
+  }
+
+  /**
+   * Fetch rates from external API and update database
+   */
+  async fetchAndUpdateRates(): Promise<void> {
+    const response = await this.currencyClient.latest({
+      base_currency: 'USD',
+    });
+
+    if (!response.data || typeof response.data !== 'object') {
+      throw new Error('Currencies not found');
+    }
+
+    const rates = Object.values(response.data).map((rate) => ({
+      code: rate.code,
+      value: rate.value,
+    }));
+
+    await this.updateManyRates(rates);
+  }
+
+  /**
+   * Get latest valid rate, update if expired
+   */
+  async getLatestValidRate(): Promise<Rate[]> {
+    const last = await this.getLatestUpdatedRate();
+
+    const isValid =
+      last && Date.now() - new Date(last.updatedAt).getTime() < RATES_TTL_MS;
+
+    if (isValid) return this.findAll();
+
+    await this.fetchAndUpdateRates();
+
+    return this.findAll();
+  }
+}

@@ -1,12 +1,11 @@
-import currencyapi from '@everapi/currencyapi-js';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
 
 import { Currency, CurrencyDocument } from './currency.schema';
 import { CreateCurrencyDto, UpdateCurrencyDto } from './currency.dto';
 import { CurrencyData } from './currency.types';
+import { CURRENCY_API_CLIENT } from './currency.constants';
 
 type CurrencyApiClient = {
   currencies: () => Promise<{
@@ -16,19 +15,13 @@ type CurrencyApiClient = {
 
 @Injectable()
 export class CurrencyService {
-  private currencyClient: CurrencyApiClient;
-
   constructor(
-    @InjectModel(Currency.name) private currencyModel: Model<CurrencyDocument>,
-    private configService: ConfigService,
-  ) {
-    const apiKey = this.configService.get<string>('CURRENCY_API_KEY');
-    if (!apiKey) {
-      throw new Error('CURRENCY_API_KEY is not configured');
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    this.currencyClient = new currencyapi(apiKey) as CurrencyApiClient;
-  }
+    @Inject(CURRENCY_API_CLIENT)
+    private readonly currencyClient: CurrencyApiClient,
+
+    @InjectModel(Currency.name)
+    private readonly currencyModel: Model<CurrencyDocument>,
+  ) {}
 
   async create(createCurrencyDto: CreateCurrencyDto): Promise<Currency> {
     const createdCurrency = new this.currencyModel(createCurrencyDto);
