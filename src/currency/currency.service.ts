@@ -1,33 +1,33 @@
+import currencyapi from '@everapi/currencyapi-js';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import currencyapi from '@everapi/currencyapi-js';
+
 import { Currency, CurrencyDocument } from './currency.schema';
 import { CreateCurrencyDto, UpdateCurrencyDto } from './currency.dto';
+import { CurrencyData } from './currency.types';
 
-interface CurrencyApiData {
-  symbol?: string;
-  name?: string;
-  symbol_native?: string;
-  decimal_digits?: number;
-  rounding?: number;
-  name_plural?: string;
-  type?: string;
-  countries?: string[];
-}
+type CurrencyApiClient = {
+  currencies: () => Promise<{
+    data?: Record<string, CurrencyData>;
+  }>;
+};
 
 @Injectable()
 export class CurrencyService {
-  private currencyClient: any;
+  private currencyClient: CurrencyApiClient;
 
   constructor(
     @InjectModel(Currency.name) private currencyModel: Model<CurrencyDocument>,
     private configService: ConfigService,
   ) {
-    this.currencyClient = new currencyapi(
-      this.configService.get<string>('CURRENCY_API_KEY'),
-    );
+    const apiKey = this.configService.get<string>('CURRENCY_API_KEY');
+    if (!apiKey) {
+      throw new Error('CURRENCY_API_KEY is not configured');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    this.currencyClient = new currencyapi(apiKey) as CurrencyApiClient;
   }
 
   async create(createCurrencyDto: CreateCurrencyDto): Promise<Currency> {
@@ -77,7 +77,7 @@ export class CurrencyService {
       }
 
       const operations = Object.values(currencies.data).map(
-        (currency: any) => ({
+        (currency: CurrencyData) => ({
           updateOne: {
             filter: { code: currency.code },
             update: { $set: currency },
@@ -90,7 +90,9 @@ export class CurrencyService {
         ordered: false,
       });
     } catch (error) {
-      throw new Error(`Failed to sync currencies: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to sync currencies: ${errorMessage}`);
     }
   }
 }

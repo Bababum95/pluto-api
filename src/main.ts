@@ -20,6 +20,7 @@ async function bootstrap() {
   app.use(morgan(morganFormat));
 
   // Security: HTTP headers protection
+
   app.use(helmet());
 
   // Performance: Enable gzip compression
@@ -46,4 +47,5 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+
+void bootstrap();

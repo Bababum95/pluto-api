@@ -1,10 +1,16 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
+import { CurrencyData, type CurrencyType } from './currency.types';
+
 export type CurrencyDocument = Currency & Document;
 
+/**
+ * Mongoose schema for Currency entity
+ * The class structure should match CurrencyData type from currency.types.ts
+ */
 @Schema({ timestamps: true, collection: 'currencies' })
-export class Currency {
+export class Currency implements CurrencyData {
   @Prop({ required: true, unique: true })
   code: string;
 
@@ -27,7 +33,7 @@ export class Currency {
   name_plural: string;
 
   @Prop({ required: true, enum: ['fiat', 'crypto'] })
-  type: string;
+  type: CurrencyType;
 
   @Prop({ type: [String], required: true })
   countries: string[];
