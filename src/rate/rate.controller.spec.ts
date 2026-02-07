@@ -18,8 +18,9 @@ describe('RateController', () => {
   let controller: RateController;
   let service: {
     create: jest.Mock;
-    findAll: jest.Mock;
+    getLatestValidRate: jest.Mock;
     findOne: jest.Mock;
+    findByCode: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
   };
@@ -38,8 +39,9 @@ describe('RateController', () => {
   beforeEach(async () => {
     const mockRateService = {
       create: jest.fn(),
-      findAll: jest.fn(),
+      getLatestValidRate: jest.fn(),
       findOne: jest.fn(),
+      findByCode: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
     };
@@ -71,10 +73,10 @@ describe('RateController', () => {
   describe('findAll', () => {
     it('should return an array of rates', async () => {
       const list = [mockRate];
-      service.findAll.mockResolvedValue(list);
+      service.getLatestValidRate.mockResolvedValue(list);
       const result = await controller.findAll();
-      expect(service.findAll).toHaveBeenCalled();
-      expect(service.findAll).toHaveBeenCalledTimes(1);
+      expect(service.getLatestValidRate).toHaveBeenCalled();
+      expect(service.getLatestValidRate).toHaveBeenCalledTimes(1);
       expect(result).toEqual(list);
     });
   });

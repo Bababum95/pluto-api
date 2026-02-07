@@ -1,11 +1,17 @@
+import path from 'path';
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CurrencyModule } from './currency/currency.module';
 import { RateModule } from './rate/rate.module';
+import { UsersModule } from './user/users.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
 
 @Module({
   imports: [
@@ -18,10 +24,20 @@ import { RateModule } from './rate/rate.module';
         dbName: configService.get<string>('MONGODB_DB_NAME') || 'pluto',
       }),
     }),
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      resolvers: [new AcceptLanguageResolver()],
+      loaderOptions: {
+        path: path.join(process.cwd(), 'i18n'),
+        watch: true,
+      },
+    }),
     CurrencyModule,
     RateModule,
+    UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGlobalGuard }],
 })
 export class AppModule {}

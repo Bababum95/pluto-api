@@ -1,6 +1,7 @@
 import compression from 'compression';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -25,6 +26,18 @@ async function bootstrap() {
 
   // Performance: Enable gzip compression
   app.use(compression());
+
+  // Enable cookie parser
+  app.use(cookieParser());
+
+  // Enable CORS
+  const corsOrigin = configService.get<string>('CORS_ORIGIN');
+  if (corsOrigin) {
+    app.enableCors({
+      origin: corsOrigin,
+      credentials: true,
+    });
+  }
 
   app.setGlobalPrefix(APP_VERSION);
 

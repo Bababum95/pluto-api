@@ -1,0 +1,13 @@
+{
+    "errors": {
+        "emailAlreadyExists": "User with this email already exists",
+        "notFound": "User not found"
+    },
+    "create": {
+        "success": "User has been successfully created",
+        "failed": "User creation failed"
+    },
+    "remove": {
+        "success": "User has been successfully deleted"
+    }
+}
