@@ -7,6 +7,8 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
+import { UserDto } from '../user/users.dto';
+
 export class LoginDto {
   @ApiProperty({ example: 'user@example.com' })
   @IsString()
@@ -51,3 +53,14 @@ export type RequestUser = {
   userId: string;
   email: string;
 };
+
+/** Response for login/register: user + Bearer token (client stores token, sends in Authorization header). */
+export class AuthResponseDto {
+  @ApiProperty({ type: () => UserDto, description: 'User profile' })
+  user!: UserDto;
+
+  @ApiProperty({
+    description: 'JWT access token; send as Authorization: Bearer <token>',
+  })
+  accessToken!: string;
+}

@@ -2,16 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
 
 import { UsersService } from '../user/users.service';
 import type { UserDocument } from '../user/user.schema';
 
 import type { JwtPayload, RequestUser } from './auth.dto';
 import type { RegisterDto } from './auth.dto';
-
-/** Default token TTL: 7 days in seconds */
-const DEFAULT_JWT_EXPIRES_IN_SEC = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class AuthService {
@@ -52,28 +48,15 @@ export class AuthService {
   }
 
   /**
-   * Generates JWT access token and attaches it as HTTP-only cookie
+   * Generates JWT access token for the user (returned in response body; client sends as Bearer).
    */
-  attachAuthCookie(res: Response, user: UserDocument): void {
-    // Ensure _id is ObjectId for token generation
+  createAccessToken(user: UserDocument): string {
     const _id =
       typeof user._id === 'string' ? new Types.ObjectId(user._id) : user._id;
 
-    const expiresIn =
-      this.configService.get<number>('JWT_EXPIRES_IN') ??
-      DEFAULT_JWT_EXPIRES_IN_SEC;
-
-    const token = this.jwtService.sign({
+    return this.jwtService.sign({
       sub: _id.toString(),
       email: user.email,
-    });
-
-    res.cookie('access_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: expiresIn * 1000,
-      path: '/',
     });
   }
 }
