@@ -56,11 +56,11 @@ export type RequestUser = {
 
 /** Response for login/register: user + Bearer token (client stores token, sends in Authorization header). */
 export class AuthResponseDto {
-  @ApiProperty({ type: () => UserDto, description: 'User profile' })
-  user!: UserDto;
+  @ApiProperty({ type: UserDto, description: 'User profile' })
+  user: UserDto;
 
   @ApiProperty({
     description: 'JWT access token; send as Authorization: Bearer <token>',
   })
-  accessToken!: string;
+  accessToken: string;
 }
