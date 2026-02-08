@@ -110,6 +110,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
     });
     return { message: i18n.t('auth.logout.success') };
   }
