@@ -32,6 +32,6 @@ import { CurrencyApiClient } from './currency.types';
     },
     CurrencyService,
   ],
-  exports: [CURRENCY_API_CLIENT],
+  exports: [CURRENCY_API_CLIENT, CurrencyService],
 })
 export class CurrencyModule {}
