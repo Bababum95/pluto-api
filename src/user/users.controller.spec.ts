@@ -91,12 +91,15 @@ describe('UsersController', () => {
   });
 
   describe('create', () => {
-    it('should create a user and return it', async () => {
+    it('should create a user and return it as UserDto', async () => {
       service.create.mockResolvedValue(mockUser);
+      service.toUserDto.mockImplementation((user: MockedUser) =>
+        toUserDto(user),
+      );
       const result = await controller.create(mockCreateDto);
       expect(service.create).toHaveBeenCalledWith(mockCreateDto);
       expect(service.create).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(mockUser);
+      expect(result).toEqual(toUserDto(mockUser));
     });
   });
 

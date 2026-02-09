@@ -11,6 +11,7 @@ import { CurrencyModule } from './currency/currency.module';
 import { RateModule } from './rate/rate.module';
 import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
+import { CategoryModule } from './category/category.module';
 import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
 
 @Module({
@@ -36,6 +37,7 @@ import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
     RateModule,
     UsersModule,
     AuthModule,
+    CategoryModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGlobalGuard }],
