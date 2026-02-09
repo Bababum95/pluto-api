@@ -46,6 +46,18 @@ describe('CurrencyController', () => {
     countries: ['US'],
   };
 
+  const mockCurrencyDto = {
+    id: mockCurrency._id,
+    code: mockCurrency.code,
+    symbol: mockCurrency.symbol,
+    name: mockCurrency.name,
+    symbol_native: mockCurrency.symbol_native,
+    decimal_digits: mockCurrency.decimal_digits,
+    rounding: mockCurrency.rounding,
+    name_plural: mockCurrency.name_plural,
+    type: mockCurrency.type,
+  };
+
   const mockCreateDto: CreateCurrencyDto = {
     code: 'USD',
     symbol: '$',
@@ -66,6 +78,7 @@ describe('CurrencyController', () => {
       update: jest.fn(),
       remove: jest.fn(),
       sync: jest.fn(),
+      toCurrencyDto: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -85,10 +98,11 @@ describe('CurrencyController', () => {
   describe('create', () => {
     it('should create a currency and return it', async () => {
       service.create.mockResolvedValue(mockCurrency);
+      service.toCurrencyDto.mockReturnValue(mockCurrencyDto);
       const result = await controller.create(mockCreateDto);
       expect(service.create).toHaveBeenCalledWith(mockCreateDto);
-      expect(service.create).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(mockCurrency);
+      expect(service.toCurrencyDto).toHaveBeenCalledWith(mockCurrency);
+      expect(result).toEqual(mockCurrencyDto);
     });
   });
 
@@ -96,20 +110,22 @@ describe('CurrencyController', () => {
     it('should return an array of currencies', async () => {
       const list = [mockCurrency];
       service.findAll.mockResolvedValue(list);
+      service.toCurrencyDto.mockReturnValue(mockCurrencyDto);
       const result = await controller.findAll();
       expect(service.findAll).toHaveBeenCalled();
-      expect(service.findAll).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(list);
+      expect(service.toCurrencyDto).toHaveBeenCalledWith(mockCurrency);
+      expect(result).toEqual([mockCurrencyDto]);
     });
   });
 
   describe('findOne', () => {
     it('should return a currency by id', async () => {
       service.findOne.mockResolvedValue(mockCurrency);
+      service.toCurrencyDto.mockReturnValue(mockCurrencyDto);
       const result = await controller.findOne(mockCurrency._id);
       expect(service.findOne).toHaveBeenCalledWith(mockCurrency._id);
-      expect(service.findOne).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(mockCurrency);
+      expect(service.toCurrencyDto).toHaveBeenCalledWith(mockCurrency);
+      expect(result).toEqual(mockCurrencyDto);
     });
 
     it('should throw when currency not found', async () => {
@@ -124,11 +140,13 @@ describe('CurrencyController', () => {
     it('should update a currency and return it', async () => {
       const updateDto: UpdateCurrencyDto = { name: 'Updated Name' };
       const updated = { ...mockCurrency, name: 'Updated Name' };
+      const updatedDto = { ...mockCurrencyDto, name: 'Updated Name' };
       service.update.mockResolvedValue(updated);
+      service.toCurrencyDto.mockReturnValue(updatedDto);
       const result = await controller.update(mockCurrency._id, updateDto);
       expect(service.update).toHaveBeenCalledWith(mockCurrency._id, updateDto);
-      expect(service.update).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(updated);
+      expect(service.toCurrencyDto).toHaveBeenCalledWith(updated);
+      expect(result).toEqual(updatedDto);
     });
 
     it('should throw when currency not found', async () => {
@@ -140,12 +158,12 @@ describe('CurrencyController', () => {
   });
 
   describe('remove', () => {
-    it('should remove a currency and return it', async () => {
+    it('should remove a currency and return void', async () => {
       service.remove.mockResolvedValue(mockCurrency);
       const result = await controller.remove(mockCurrency._id);
       expect(service.remove).toHaveBeenCalledWith(mockCurrency._id);
       expect(service.remove).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(mockCurrency);
+      expect(result).toBeUndefined();
     });
 
     it('should throw when currency not found', async () => {

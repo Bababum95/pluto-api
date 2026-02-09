@@ -32,7 +32,7 @@ export class Currency implements CurrencyData {
   @Prop({ required: true })
   name_plural: string;
 
-  @Prop({ required: true, enum: ['fiat', 'crypto'] })
+  @Prop({ required: true, enum: ['fiat', 'crypto'], type: String })
   type: CurrencyType;
 
   @Prop({ type: [String], required: true })
