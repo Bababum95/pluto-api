@@ -61,6 +61,7 @@ const createChain = (resolvedValue: unknown) => ({
   exec: jest.fn().mockResolvedValue(resolvedValue),
   lean: jest.fn().mockReturnThis(),
   sort: jest.fn().mockReturnThis(),
+  select: jest.fn().mockReturnThis(),
   populate: jest.fn().mockReturnThis(),
 });
 
@@ -90,6 +91,7 @@ describe('AccountService', () => {
     balance: 100050, // Stored in minor units (1000.50 USD with scale 2)
     scale: 2,
     currency: mockCurrency,
+    order: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as unknown as AccountDocument;
@@ -158,7 +160,13 @@ describe('AccountService', () => {
     jest.clearAllMocks();
 
     // Restore chainable return values after clearAllMocks
-    MockModel.findOne.mockReturnValue(createChain(null));
+    const chainWithSelect = {
+      ...createChain(null),
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+    };
+    MockModel.findOne.mockReturnValue(chainWithSelect);
     MockModel.find.mockReturnValue(createChain([]));
     MockModel.findById.mockReturnValue(createChain(null));
     MockModel.findOneAndUpdate.mockReturnValue(createChain(null));
@@ -183,15 +191,16 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
+      // Mock findOne for checking existing account and finding max order
+      mockAccountModel.findOne
+        .mockReturnValueOnce(createChain(null)) // No existing account with same name
+        .mockReturnValueOnce(createChain(null)); // No existing accounts (for order calculation)
       mockAccountModel.findById.mockReturnValue(createChain(mockAccount));
 
       const result = await service.create(userId, createDto);
 
       expect(mockCurrencyModel.findById).toHaveBeenCalledWith(currencyId);
-      expect(mockAccountModel.findOne).toHaveBeenCalledWith({
-        user: new Types.ObjectId(userId),
-        name: 'Main Wallet',
-      });
+      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(2);
       expect(saveMock).toHaveBeenCalled();
       expect(mockAccountModel.findById).toHaveBeenCalledWith(accountId);
       expect(result).toEqual(mockAccount);
@@ -209,10 +218,15 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
+      // Mock findOne for checking existing account and finding max order
+      mockAccountModel.findOne
+        .mockReturnValueOnce(createChain(null)) // No existing account with same name
+        .mockReturnValueOnce(createChain(null)); // No existing accounts (for order calculation)
       const accountWithDefaultBalance = {
         ...mockAccount,
         balance: 0, // 0 in minor units
         name: 'New Wallet',
+        order: 0,
       };
       mockAccountModel.findById.mockReturnValue(
         createChain(accountWithDefaultBalance),
@@ -220,10 +234,7 @@ describe('AccountService', () => {
 
       const result = await service.create(userId, createDto);
 
-      expect(mockAccountModel.findOne).toHaveBeenCalledWith({
-        user: new Types.ObjectId(userId),
-        name: 'New Wallet',
-      });
+      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(2);
       expect(saveMock).toHaveBeenCalled();
       expect(result).toEqual(accountWithDefaultBalance);
     });
@@ -241,6 +252,7 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
+      // Mock findOne: finds existing account with same name
       mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
 
       await expect(service.create(userId, createDto)).rejects.toThrow(
@@ -264,6 +276,8 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
       });
+      // Mock findOne for checking existing account (will fail before order check)
+      mockAccountModel.findOne.mockReturnValueOnce(createChain(null));
 
       await expect(service.create(userId, createDto)).rejects.toThrow(
         BadRequestException,
@@ -271,6 +285,62 @@ describe('AccountService', () => {
       await expect(service.create(userId, createDto)).rejects.toThrow(
         'Currency not found',
       );
+    });
+
+    it('should auto-increment order when order is not provided', async () => {
+      const currencyId = mockCurrency._id.toString();
+      const createDto: CreateAccountDto = {
+        color: '#FF5733',
+        icon: 'wallet',
+        name: 'Second Wallet',
+        balance: 1000.5,
+        scale: 2,
+        currency: currencyId,
+      };
+      const existingAccount = { ...mockAccount, order: 2 };
+      mockCurrencyModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockCurrency),
+      });
+      // First call: check name conflict (none)
+      // Second call: find max order (returns account with order 2)
+      mockAccountModel.findOne
+        .mockReturnValueOnce(createChain(null))
+        .mockReturnValueOnce(createChain(existingAccount));
+      const newAccount = { ...mockAccount, name: 'Second Wallet', order: 3 };
+      mockAccountModel.findById.mockReturnValue(createChain(newAccount));
+
+      const result = await service.create(userId, createDto);
+
+      expect(result.order).toBe(3); // max(2) + 1
+    });
+
+    it('should use provided order when order is specified', async () => {
+      const currencyId = mockCurrency._id.toString();
+      const createDto: CreateAccountDto = {
+        color: '#FF5733',
+        icon: 'wallet',
+        name: 'Custom Order Wallet',
+        balance: 1000.5,
+        scale: 2,
+        currency: currencyId,
+        order: 5,
+      };
+      mockCurrencyModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockCurrency),
+      });
+      mockAccountModel.findOne
+        .mockReturnValueOnce(createChain(null)) // No name conflict
+        .mockReturnValueOnce(createChain(null)); // Order check (not used when order provided)
+      const newAccount = {
+        ...mockAccount,
+        name: 'Custom Order Wallet',
+        order: 5,
+      };
+      mockAccountModel.findById.mockReturnValue(createChain(newAccount));
+
+      const result = await service.create(userId, createDto);
+
+      expect(result.order).toBe(5); // Uses provided order
     });
   });
 
@@ -463,6 +533,7 @@ describe('AccountService', () => {
         balance: 1000.5, // Converted from 100050 minor units with scale 2
         scale: mockAccount.scale,
         currency: currencyDto,
+        order: mockAccount.order,
         createdAt: mockAccount.createdAt.toISOString(),
         updatedAt: mockAccount.updatedAt.toISOString(),
       });

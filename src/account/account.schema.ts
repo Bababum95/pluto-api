@@ -64,6 +64,13 @@ export class Account {
   })
   currency: Types.ObjectId;
 
+  @Prop({
+    required: true,
+    type: Number,
+    default: 0,
+  })
+  order: number; // Order for sorting accounts per user
+
   createdAt: Date;
   updatedAt: Date;
 }

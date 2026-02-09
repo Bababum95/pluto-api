@@ -67,6 +67,17 @@ export class CreateAccountDto {
   @IsMongoId()
   @IsNotEmpty()
   currency: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Order for sorting accounts (auto-incremented per user)',
+    required: false,
+  })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  order?: number;
 }
 
 export class UpdateAccountDto extends PartialType(CreateAccountDto) {}
@@ -92,6 +103,9 @@ export class AccountDto {
 
   @ApiProperty({ type: CurrencyDto })
   currency: CurrencyDto;
+
+  @ApiProperty({ example: 1 })
+  order: number;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;

@@ -31,6 +31,7 @@ describe('CurrencyController', () => {
     update: jest.Mock;
     remove: jest.Mock;
     sync: jest.Mock;
+    toCurrencyDto: jest.Mock;
   };
 
   const mockCurrency: MockedCurrency = {

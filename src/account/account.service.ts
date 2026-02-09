@@ -72,6 +72,19 @@ export class AccountService {
       createAccountDto.scale,
     );
 
+    // Calculate order: max(order) + 1 for this user, or 0 if no accounts exist
+    const maxOrderAccount = await this.accountModel
+      .findOne({ user: new Types.ObjectId(userId) })
+      .sort({ order: -1 })
+      .select('order')
+      .lean()
+      .exec();
+
+    const order =
+      createAccountDto.order !== undefined
+        ? createAccountDto.order
+        : (maxOrderAccount?.order ?? -1) + 1;
+
     const account = new this.accountModel({
       color: createAccountDto.color,
       icon: createAccountDto.icon,
@@ -80,6 +93,7 @@ export class AccountService {
       scale: createAccountDto.scale,
       user: new Types.ObjectId(userId),
       balance: balanceInMinorUnits,
+      order,
     });
 
     await account.save();
@@ -94,7 +108,7 @@ export class AccountService {
     return this.accountModel
       .find({ user: new Types.ObjectId(userId) })
       .populate('currency')
-      .sort({ createdAt: -1 })
+      .sort({ order: 1, createdAt: -1 })
       .exec();
   }
 
@@ -170,6 +184,9 @@ export class AccountService {
     if (updateAccountDto.scale !== undefined) {
       updateData.scale = updateAccountDto.scale;
     }
+    if (updateAccountDto.order !== undefined) {
+      updateData.order = updateAccountDto.order;
+    }
     if (updateAccountDto.balance !== undefined) {
       // Use new scale if provided, otherwise use existing scale
       const scale = updateAccountDto.scale ?? existingAccount.scale;
@@ -216,6 +233,7 @@ export class AccountService {
       balance: this.fromMinorUnits(account.balance, account.scale),
       scale: account.scale,
       currency: this.currencyService.toCurrencyDto(account.currency),
+      order: account.order,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     };
