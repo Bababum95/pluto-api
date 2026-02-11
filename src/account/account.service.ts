@@ -97,7 +97,10 @@ export class AccountService {
     });
 
     await account.save();
-    const created = await this.accountModel.findById(account._id).exec();
+    const created = await this.accountModel
+      .findById(account._id)
+      .populate('currency')
+      .exec();
     if (!created) {
       throw new Error(this.i18n.t('account.create.failed'));
     }
