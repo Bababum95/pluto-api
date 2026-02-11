@@ -18,7 +18,13 @@ import {
 } from '@nestjs/swagger';
 
 import { AccountService } from './account.service';
-import { CreateAccountDto, UpdateAccountDto, AccountDto } from './account.dto';
+import {
+  CreateAccountDto,
+  UpdateAccountDto,
+  AccountDto,
+  AccountSummaryDto,
+  AccountListResponseDto,
+} from './account.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
 
@@ -53,12 +59,40 @@ export class AccountController {
   @ApiOperation({ summary: 'Get all accounts for the current user' })
   @ApiResponse({
     status: 200,
-    description: 'List of all accounts for the current user.',
-    type: [AccountDto],
+    description:
+      'List of all accounts for the current user with total balance summary.',
+    schema: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/AccountDto' },
+        },
+        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
+      },
+    },
   })
-  async findAll(@UserDecorator() user: RequestUser): Promise<AccountDto[]> {
-    const accounts = await this.accountService.findAll(user.userId);
-    return accounts.map((account) => this.accountService.toAccountDto(account));
+  async findAll(
+    @UserDecorator() user: RequestUser,
+  ): Promise<AccountListResponseDto> {
+    return this.accountService.findAllWithSummary(user.userId);
+  }
+
+  @Get('summary')
+  @ApiOperation({
+    summary: 'Get total balance of all accounts in user currency',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Total balance of all accounts converted to user currency via USD.',
+    type: AccountSummaryDto,
+  })
+  @ApiResponse({ status: 400, description: 'Exchange rate not found.' })
+  async getSummary(
+    @UserDecorator() user: RequestUser,
+  ): Promise<AccountSummaryDto> {
+    return this.accountService.getSummary(user.userId);
   }
 
   @Get(':id')

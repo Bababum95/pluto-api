@@ -1,9 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { Account, AccountSchema } from './account.schema';
 import { Currency, CurrencySchema } from '../currency/currency.schema';
 import { CurrencyModule } from '../currency/currency.module';
+import { RateModule } from '../rate/rate.module';
+import { SettingsModule } from '../settings/settings.module';
 import { AccountController } from './account.controller';
 import { AccountService } from './account.service';
 
@@ -14,6 +16,8 @@ import { AccountService } from './account.service';
       { name: Currency.name, schema: CurrencySchema },
     ]),
     CurrencyModule,
+    RateModule,
+    forwardRef(() => SettingsModule),
   ],
   controllers: [AccountController],
   providers: [AccountService],

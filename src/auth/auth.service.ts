@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 
 import { UsersService } from '../user/users.service';
+import { SettingsService } from '../settings/settings.service';
 import type { UserDocument } from '../user/user.schema';
 
 import type { JwtPayload, RequestUser } from './auth.dto';
@@ -13,6 +14,7 @@ import type { RegisterDto } from './auth.dto';
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly settingsService: SettingsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -31,10 +33,13 @@ export class AuthService {
   }
 
   /**
-   * Register a new user (validates, hashes password via schema, checks uniqueness)
+   * Register a new user (validates, hashes password via schema, checks uniqueness).
+   * Creates default settings for the user (currency USD, account null).
    */
   async register(registerDto: RegisterDto): Promise<UserDocument> {
-    return await this.usersService.create(registerDto);
+    const user = await this.usersService.create(registerDto);
+    await this.settingsService.createDefault(user._id.toString());
+    return user;
   }
 
   /**

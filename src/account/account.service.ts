@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import {
   Injectable,
   NotFoundException,
@@ -11,7 +12,16 @@ import { I18nService } from 'nestjs-i18n';
 import { Account, AccountDocument } from './account.schema';
 import { Currency, CurrencyDocument } from '../currency/currency.schema';
 import { CurrencyService } from '../currency/currency.service';
-import { CreateAccountDto, UpdateAccountDto, AccountDto } from './account.dto';
+import { RateService } from '../rate/rate.service';
+import { SettingsService } from '../settings/settings.service';
+import {
+  CreateAccountDto,
+  UpdateAccountDto,
+  AccountDto,
+  AccountSummaryDto,
+  AccountListResponseDto,
+} from './account.dto';
+import { Rate } from 'src/rate/rate.schema';
 
 @Injectable()
 export class AccountService {
@@ -21,21 +31,16 @@ export class AccountService {
     @InjectModel(Currency.name)
     private readonly currencyModel: Model<CurrencyDocument>,
     private readonly currencyService: CurrencyService,
+    private readonly rateService: RateService,
+    private readonly settingsService: SettingsService,
     private readonly i18n: I18nService,
   ) {}
-
-  /**
-   * Convert decimal balance to minor units (e.g., 1000.50 USD -> 100050 cents)
-   */
-  private toMinorUnits(balance: number, scale: number): number {
-    return Math.round(balance * Math.pow(10, scale));
-  }
 
   /**
    * Convert minor units to decimal balance (e.g., 100050 cents -> 1000.50 USD)
    */
   private fromMinorUnits(balance: number, scale: number): number {
-    return balance / Math.pow(10, scale);
+    return new Decimal(balance).div(new Decimal(10).pow(scale)).toNumber();
   }
 
   async create(
@@ -67,11 +72,6 @@ export class AccountService {
       );
     }
 
-    const balanceInMinorUnits = this.toMinorUnits(
-      createAccountDto.balance ?? 0,
-      createAccountDto.scale,
-    );
-
     // Calculate order: max(order) + 1 for this user, or 0 if no accounts exist
     const maxOrderAccount = await this.accountModel
       .findOne({ user: new Types.ObjectId(userId) })
@@ -92,7 +92,7 @@ export class AccountService {
       currency: new Types.ObjectId(createAccountDto.currency),
       scale: createAccountDto.scale,
       user: new Types.ObjectId(userId),
-      balance: balanceInMinorUnits,
+      balance: createAccountDto.balance,
       order,
     });
 
@@ -188,9 +188,7 @@ export class AccountService {
       updateData.order = updateAccountDto.order;
     }
     if (updateAccountDto.balance !== undefined) {
-      // Use new scale if provided, otherwise use existing scale
-      const scale = updateAccountDto.scale ?? existingAccount.scale;
-      updateData.balance = this.toMinorUnits(updateAccountDto.balance, scale);
+      updateData.balance = updateAccountDto.balance;
     }
 
     const account = await this.accountModel
@@ -231,11 +229,104 @@ export class AccountService {
       icon: account.icon,
       name: account.name,
       balance: this.fromMinorUnits(account.balance, account.scale),
+      balance_raw: account.balance,
       scale: account.scale,
       currency: this.currencyService.toCurrencyDto(account.currency),
       order: account.order,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Calculates total balance across accounts in target currency.
+   * All calculations are done using Decimal.js for precision.
+   */
+  calculateAccountsSummary(
+    accounts: AccountDocument[],
+    rates: Rate[],
+    targetCurrency: CurrencyDocument,
+  ): AccountSummaryDto {
+    const rateMap = new Map<string, Decimal>(
+      rates.map((r) => [r.code, new Decimal(r.value)]),
+    );
+
+    let totalInUSD = new Decimal(0);
+
+    for (const account of accounts) {
+      // Convert account balance from minor units to decimal
+      const accountAmount = new Decimal(account.balance).div(
+        new Decimal(10).pow(account.scale),
+      );
+
+      const code = account.currency.code;
+
+      if (code === 'USD') {
+        totalInUSD = totalInUSD.plus(accountAmount);
+        continue;
+      }
+
+      const rate = rateMap.get(code);
+      if (!rate) {
+        throw new Error(`Rate not found for currency ${code}`);
+      }
+
+      // Convert to USD: divide by rate (rate = currency per 1 USD)
+      const amountInUSD = accountAmount.div(rate);
+      totalInUSD = totalInUSD.plus(amountInUSD);
+    }
+
+    // Convert from USD to target currency
+    let totalInTarget: Decimal;
+
+    if (targetCurrency.code === 'USD') {
+      totalInTarget = totalInUSD;
+    } else {
+      const targetRate = rateMap.get(targetCurrency.code);
+      if (!targetRate) {
+        throw new Error(`Rate not found for currency ${targetCurrency.code}`);
+      }
+
+      totalInTarget = totalInUSD.mul(targetRate);
+    }
+
+    const rounded = totalInTarget.toDecimalPlaces(
+      targetCurrency.decimal_digits,
+      Decimal.ROUND_HALF_UP,
+    );
+
+    const balanceInMinorUnits = rounded
+      .mul(new Decimal(10).pow(targetCurrency.decimal_digits))
+      .toNumber();
+
+    return {
+      total_raw: balanceInMinorUnits,
+      total: rounded.toNumber(),
+      scale: targetCurrency.decimal_digits,
+      currency: this.currencyService.toCurrencyDto(targetCurrency),
+    };
+  }
+
+  async getSummary(userId: string): Promise<AccountSummaryDto> {
+    const settings = await this.settingsService.findOneOrFail(userId);
+    const accounts = await this.findAll(userId);
+    const rates = await this.rateService.getLatestValidRate();
+
+    return this.calculateAccountsSummary(accounts, rates, settings.currency);
+  }
+
+  async findAllWithSummary(userId: string): Promise<AccountListResponseDto> {
+    const settings = await this.settingsService.findOneOrFail(userId);
+    const accounts = await this.findAll(userId);
+    const rates = await this.rateService.getLatestValidRate();
+
+    const list = accounts.map((account) => this.toAccountDto(account));
+    const summary = this.calculateAccountsSummary(
+      accounts,
+      rates,
+      settings.currency,
+    );
+
+    return { list, summary };
   }
 }

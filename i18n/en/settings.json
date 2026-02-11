@@ -1,0 +1,10 @@
+{
+  "errors": {
+    "notFound": "Settings not found",
+    "currencyNotFound": "Currency not found",
+    "accountNotFound": "Account not found"
+  },
+  "create": {
+    "failed": "Failed to create default settings"
+  }
+}

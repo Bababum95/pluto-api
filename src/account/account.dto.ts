@@ -98,6 +98,9 @@ export class AccountDto {
   @ApiProperty({ example: 1000.5 })
   balance: number; // Converted from minor units for API response
 
+  @ApiProperty({ example: 100050 })
+  balance_raw: number;
+
   @ApiProperty({ example: 2 })
   scale: number;
 
@@ -113,3 +116,34 @@ export class AccountDto {
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   updatedAt: string;
 }
+
+export class AccountSummaryDto {
+  @ApiProperty({
+    example: 154327,
+    description: 'Total balance in minor units (e.g., cents for USD)',
+  })
+  total_raw: number;
+
+  @ApiProperty({
+    example: 2,
+    description: 'Number of decimal places for the currency (scale)',
+  })
+  scale: number;
+
+  @ApiProperty({
+    example: 1543.27,
+    description: 'Total balance in decimal format',
+  })
+  total: number;
+
+  @ApiProperty({
+    type: CurrencyDto,
+    description: 'User currency for the total amount',
+  })
+  currency: CurrencyDto;
+}
+
+export type AccountListResponseDto = {
+  list: AccountDto[];
+  summary: AccountSummaryDto;
+};

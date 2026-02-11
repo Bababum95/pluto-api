@@ -48,6 +48,13 @@ export class CurrencyService {
     return currency;
   }
 
+  /**
+   * Find currency by code (e.g. 'USD' for default settings).
+   */
+  async findByCode(code: string): Promise<CurrencyDocument | null> {
+    return this.currencyModel.findOne({ code: code.toUpperCase() }).exec();
+  }
+
   async update(
     id: string,
     updateCurrencyDto: UpdateCurrencyDto,

@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { UsersModule } from '../user/users.module';
+import { SettingsModule } from '../settings/settings.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { LocalStrategy } from './local.strategy';
@@ -15,6 +16,7 @@ const DEFAULT_JWT_EXPIRES_IN_SEC = 7 * 24 * 60 * 60;
 @Module({
   imports: [
     UsersModule,
+    SettingsModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

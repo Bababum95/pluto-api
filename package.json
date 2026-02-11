@@ -32,6 +32,7 @@
     "class-validator": "^0.14.3",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
+    "decimal.js": "^10.6.0",
     "helmet": "^8.1.0",
     "mongoose": "^9.1.5",
     "morgan": "^1.10.1",

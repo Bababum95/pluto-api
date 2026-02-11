@@ -13,6 +13,7 @@ import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { AccountModule } from './account/account.module';
+import { SettingsModule } from './settings/settings.module';
 import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
 
 @Module({
@@ -40,6 +41,7 @@ import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
     AuthModule,
     CategoryModule,
     AccountModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGlobalGuard }],
