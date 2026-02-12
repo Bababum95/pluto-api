@@ -27,10 +27,12 @@ describe('AccountController', () => {
   let controller: AccountController;
   let service: {
     create: jest.Mock;
-    findAll: jest.Mock;
+    findAllWithSummary: jest.Mock;
     findOne: jest.Mock;
     update: jest.Mock;
+    toggleExcluded: jest.Mock;
     remove: jest.Mock;
+    getSummary: jest.Mock;
     toAccountDto: jest.Mock;
   };
 
@@ -76,10 +78,12 @@ describe('AccountController', () => {
   beforeEach(async () => {
     const mockAccountService = {
       create: jest.fn(),
-      findAll: jest.fn(),
+      findAllWithSummary: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
+      toggleExcluded: jest.fn(),
       remove: jest.fn(),
+      getSummary: jest.fn(),
       toAccountDto: jest.fn(),
     };
 
@@ -98,9 +102,21 @@ describe('AccountController', () => {
   });
 
   describe('create', () => {
-    it('should create an account and return AccountDto', async () => {
+    it('should create an account and return account with summary', async () => {
+      const mockSummary = {
+        total_raw: 100050,
+        scale: 2,
+        total: 1000.5,
+        currency: {
+          id: 'cur1',
+          code: 'USD',
+          name: 'US Dollar',
+          decimal_digits: 2,
+        },
+      };
       service.create.mockResolvedValue(mockAccount);
       service.toAccountDto.mockReturnValue(mockAccountDto);
+      service.getSummary.mockResolvedValue(mockSummary);
 
       const result = await controller.create(mockUser, mockCreateDto);
 
@@ -109,21 +125,37 @@ describe('AccountController', () => {
         mockCreateDto,
       );
       expect(service.toAccountDto).toHaveBeenCalledWith(mockAccount);
-      expect(result).toEqual(mockAccountDto);
+      expect(service.getSummary).toHaveBeenCalledWith(mockUser.userId);
+      expect(result).toEqual({
+        account: mockAccountDto,
+        summary: mockSummary,
+      });
     });
   });
 
   describe('findAll', () => {
-    it('should return an array of AccountDto for the user', async () => {
-      const list = [mockAccount];
-      service.findAll.mockResolvedValue(list);
-      service.toAccountDto.mockReturnValue(mockAccountDto);
+    it('should return list and summary for the user', async () => {
+      const mockSummary = {
+        total_raw: 100050,
+        scale: 2,
+        total: 1000.5,
+        currency: {
+          id: 'cur1',
+          code: 'USD',
+          name: 'US Dollar',
+          decimal_digits: 2,
+        },
+      };
+      const mockResponse = {
+        list: [mockAccountDto],
+        summary: mockSummary,
+      };
+      service.findAllWithSummary.mockResolvedValue(mockResponse);
 
       const result = await controller.findAll(mockUser);
 
-      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId);
-      expect(service.toAccountDto).toHaveBeenCalledTimes(1);
-      expect(result).toEqual([mockAccountDto]);
+      expect(service.findAllWithSummary).toHaveBeenCalledWith(mockUser.userId);
+      expect(result).toEqual(mockResponse);
     });
   });
 
@@ -152,12 +184,24 @@ describe('AccountController', () => {
   });
 
   describe('update', () => {
-    it('should update an account and return AccountDto', async () => {
+    it('should update an account and return account with summary', async () => {
       const updateDto: UpdateAccountDto = { name: 'Updated Name' };
       const updated = { ...mockAccount, name: 'Updated Name' };
       const updatedDto = { ...mockAccountDto, name: 'Updated Name' };
+      const mockSummary = {
+        total_raw: 100050,
+        scale: 2,
+        total: 1000.5,
+        currency: {
+          id: 'cur1',
+          code: 'USD',
+          name: 'US Dollar',
+          decimal_digits: 2,
+        },
+      };
       service.update.mockResolvedValue(updated);
       service.toAccountDto.mockReturnValue(updatedDto);
+      service.getSummary.mockResolvedValue(mockSummary);
 
       const result = await controller.update(
         mockUser,
@@ -171,20 +215,70 @@ describe('AccountController', () => {
         updateDto,
       );
       expect(service.toAccountDto).toHaveBeenCalledWith(updated);
-      expect(result).toEqual(updatedDto);
+      expect(service.getSummary).toHaveBeenCalledWith(mockUser.userId);
+      expect(result).toEqual({
+        account: updatedDto,
+        summary: mockSummary,
+      });
+    });
+  });
+
+  describe('toggleExcluded', () => {
+    it('should toggle excluded and return account with summary', async () => {
+      const toggled = { ...mockAccount, excluded: true };
+      const toggledDto = { ...mockAccountDto, excluded: true };
+      const mockSummary = {
+        total_raw: 0,
+        scale: 2,
+        total: 0,
+        currency: {
+          id: 'cur1',
+          code: 'USD',
+          name: 'US Dollar',
+          decimal_digits: 2,
+        },
+      };
+      service.toggleExcluded.mockResolvedValue(toggled);
+      service.toAccountDto.mockReturnValue(toggledDto);
+      service.getSummary.mockResolvedValue(mockSummary);
+
+      const result = await controller.toggleExcluded(mockUser, mockAccount._id);
+
+      expect(service.toggleExcluded).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockAccount._id,
+      );
+      expect(service.toAccountDto).toHaveBeenCalledWith(toggled);
+      expect(service.getSummary).toHaveBeenCalledWith(mockUser.userId);
+      expect(result).toEqual({
+        account: toggledDto,
+        summary: mockSummary,
+      });
     });
   });
 
   describe('remove', () => {
-    it('should remove an account and return void', async () => {
-      service.remove.mockResolvedValue(true);
+    it('should remove an account and return new total summary', async () => {
+      const mockSummary = {
+        total_raw: 50000,
+        scale: 2,
+        total: 500.0,
+        currency: {
+          id: 'cur1',
+          code: 'USD',
+          name: 'US Dollar',
+          decimal_digits: 2,
+        },
+      };
+      service.remove.mockResolvedValue(mockSummary);
 
-      await controller.remove(mockUser, mockAccount._id);
+      const result = await controller.remove(mockUser, mockAccount._id);
 
       expect(service.remove).toHaveBeenCalledWith(
         mockUser.userId,
         mockAccount._id,
       );
+      expect(result).toEqual(mockSummary);
     });
   });
 });

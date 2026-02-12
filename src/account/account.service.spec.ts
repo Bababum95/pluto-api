@@ -11,6 +11,8 @@ import { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from './account.schema';
 import { Currency, CurrencyDocument } from '../currency/currency.schema';
 import { CurrencyService } from '../currency/currency.service';
+import { RateService } from '../rate/rate.service';
+import { SettingsService } from '../settings/settings.service';
 import { AccountService } from './account.service';
 import type { CreateAccountDto, UpdateAccountDto } from './account.dto';
 
@@ -42,6 +44,14 @@ const mockCurrency: CurrencyDocument = {
   createdAt: new Date(),
   updatedAt: new Date(),
 } as unknown as CurrencyDocument;
+
+const mockRateService = {
+  getLatestValidRate: jest.fn().mockResolvedValue([]),
+};
+
+const mockSettingsService = {
+  findOneOrFail: jest.fn().mockResolvedValue({ currency: mockCurrency }),
+};
 
 const mockCurrencyService = {
   toCurrencyDto: jest.fn((currency: CurrencyDocument) => ({
@@ -146,6 +156,14 @@ describe('AccountService', () => {
         {
           provide: CurrencyService,
           useValue: mockCurrencyService,
+        },
+        {
+          provide: RateService,
+          useValue: mockRateService,
+        },
+        {
+          provide: SettingsService,
+          useValue: mockSettingsService,
         },
         {
           provide: I18nService,
@@ -409,9 +427,9 @@ describe('AccountService', () => {
       expect(result).toEqual(updated);
     });
 
-    it('should update balance and convert to minor units', async () => {
+    it('should update balance when balance and scale provided', async () => {
       const updateDto: UpdateAccountDto = { balance: 2000.75, scale: 2 };
-      const updated = { ...mockAccount, balance: 200075, scale: 2 }; // 2000.75 * 10^2
+      const updated = { ...mockAccount, balance: 2000.75, scale: 2 };
       mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
       mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
 
@@ -426,15 +444,15 @@ describe('AccountService', () => {
           _id: accountId.toString(),
           user: new Types.ObjectId(userId),
         },
-        { balance: 200075, scale: 2 },
+        { balance: 2000.75, scale: 2 },
         { new: true },
       );
       expect(result).toEqual(updated);
     });
 
-    it('should use existing scale when updating balance without new scale', async () => {
+    it('should update balance when only balance provided', async () => {
       const updateDto: UpdateAccountDto = { balance: 2000.75 };
-      const updated = { ...mockAccount, balance: 200075 }; // Uses existing scale (2)
+      const updated = { ...mockAccount, balance: 2000.75 };
       mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
       mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
 
@@ -449,7 +467,7 @@ describe('AccountService', () => {
           _id: accountId.toString(),
           user: new Types.ObjectId(userId),
         },
-        { balance: 200075 },
+        { balance: 2000.75 },
         { new: true },
       );
       expect(result).toEqual(updated);
@@ -494,10 +512,11 @@ describe('AccountService', () => {
   });
 
   describe('remove', () => {
-    it('should remove an account and return true', async () => {
+    it('should remove an account and return new total summary', async () => {
       mockAccountModel.findOneAndDelete.mockReturnValue(
         createChain(mockAccount),
       );
+      mockAccountModel.find.mockReturnValue(createChain([]));
 
       const result = await service.remove(userId, accountId.toString());
 
@@ -505,7 +524,12 @@ describe('AccountService', () => {
         _id: accountId.toString(),
         user: new Types.ObjectId(userId),
       });
-      expect(result).toBe(true);
+      expect(result).toMatchObject({
+        total_raw: 0,
+        total: 0,
+        scale: 2,
+      });
+      expect(result.currency).toBeDefined();
     });
 
     it('should throw NotFoundException when account not found', async () => {
@@ -531,9 +555,11 @@ describe('AccountService', () => {
         icon: mockAccount.icon,
         name: mockAccount.name,
         balance: 1000.5, // Converted from 100050 minor units with scale 2
+        balance_raw: 100050,
         scale: mockAccount.scale,
         currency: currencyDto,
         order: mockAccount.order,
+        excluded: false,
         createdAt: mockAccount.createdAt.toISOString(),
         updatedAt: mockAccount.updatedAt.toISOString(),
       });

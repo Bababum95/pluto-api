@@ -161,3 +161,8 @@ export type AccountListResponseDto = {
   list: AccountDto[];
   summary: AccountSummaryDto;
 };
+
+export type AccountWithSummaryResponseDto = {
+  account: AccountDto;
+  summary: AccountSummaryDto;
+};

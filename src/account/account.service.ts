@@ -1,6 +1,8 @@
 import Decimal from 'decimal.js';
 import {
   Injectable,
+  Inject,
+  forwardRef,
   NotFoundException,
   ConflictException,
   BadRequestException,
@@ -32,6 +34,7 @@ export class AccountService {
     private readonly currencyModel: Model<CurrencyDocument>,
     private readonly currencyService: CurrencyService,
     private readonly rateService: RateService,
+    @Inject(forwardRef(() => SettingsService))
     private readonly settingsService: SettingsService,
     private readonly i18n: I18nService,
   ) {}
@@ -193,6 +196,9 @@ export class AccountService {
     if (updateAccountDto.balance !== undefined) {
       updateData.balance = updateAccountDto.balance;
     }
+    if (updateAccountDto.excluded !== undefined) {
+      updateData.excluded = updateAccountDto.excluded;
+    }
 
     const account = await this.accountModel
       .findOneAndUpdate(
@@ -210,7 +216,34 @@ export class AccountService {
     return account;
   }
 
-  async remove(userId: string, id: string): Promise<boolean> {
+  async toggleExcluded(userId: string, id: string): Promise<AccountDocument> {
+    const account = await this.accountModel
+      .findOne({
+        _id: id,
+        user: new Types.ObjectId(userId),
+      })
+      .exec();
+
+    if (!account) {
+      throw new NotFoundException(this.i18n.t('account.errors.notFound'));
+    }
+
+    account.excluded = !account.excluded;
+    await account.save();
+
+    const updated = await this.accountModel
+      .findById(account._id)
+      .populate('currency')
+      .exec();
+
+    if (!updated) {
+      throw new NotFoundException(this.i18n.t('account.errors.notFound'));
+    }
+
+    return updated;
+  }
+
+  async remove(userId: string, id: string): Promise<AccountSummaryDto> {
     const result = await this.accountModel
       .findOneAndDelete({
         _id: id,
@@ -222,7 +255,7 @@ export class AccountService {
       throw new NotFoundException(this.i18n.t('account.errors.notFound'));
     }
 
-    return true;
+    return this.getSummary(userId);
   }
 
   toAccountDto(account: AccountDocument): AccountDto {

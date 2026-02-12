@@ -24,6 +24,7 @@ import {
   AccountDto,
   AccountSummaryDto,
   AccountListResponseDto,
+  AccountWithSummaryResponseDto,
 } from './account.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -39,20 +40,31 @@ export class AccountController {
   @ApiOperation({ summary: 'Create a new account' })
   @ApiResponse({
     status: 201,
-    description: 'The account has been successfully created.',
-    type: AccountDto,
+    description:
+      'The account has been successfully created. Returns account and new total.',
+    schema: {
+      type: 'object',
+      properties: {
+        account: { $ref: '#/components/schemas/AccountDto' },
+        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
+      },
+    },
   })
   @ApiResponse({ status: 400, description: 'Bad request.' })
   @ApiResponse({ status: 409, description: 'Account name already exists.' })
   async create(
     @UserDecorator() user: RequestUser,
     @Body() createAccountDto: CreateAccountDto,
-  ): Promise<AccountDto> {
+  ): Promise<AccountWithSummaryResponseDto> {
     const account = await this.accountService.create(
       user.userId,
       createAccountDto,
     );
-    return this.accountService.toAccountDto(account);
+    const summary = await this.accountService.getSummary(user.userId);
+    return {
+      account: this.accountService.toAccountDto(account),
+      summary,
+    };
   }
 
   @Get()
@@ -114,12 +126,46 @@ export class AccountController {
     return this.accountService.toAccountDto(account);
   }
 
+  @Patch('excluded/:id')
+  @ApiOperation({ summary: 'Toggle account excluded from total balance' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'The account excluded flag has been toggled. Returns account and new total.',
+    schema: {
+      type: 'object',
+      properties: {
+        account: { $ref: '#/components/schemas/AccountDto' },
+        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Account not found.' })
+  async toggleExcluded(
+    @UserDecorator() user: RequestUser,
+    @Param('id') id: string,
+  ): Promise<AccountWithSummaryResponseDto> {
+    const account = await this.accountService.toggleExcluded(user.userId, id);
+    const summary = await this.accountService.getSummary(user.userId);
+    return {
+      account: this.accountService.toAccountDto(account),
+      summary,
+    };
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update an account by ID' })
   @ApiResponse({
     status: 200,
-    description: 'The account has been successfully updated.',
-    type: AccountDto,
+    description:
+      'The account has been successfully updated. Returns account and new total.',
+    schema: {
+      type: 'object',
+      properties: {
+        account: { $ref: '#/components/schemas/AccountDto' },
+        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Account not found.' })
   @ApiResponse({ status: 409, description: 'Account name already exists.' })
@@ -127,27 +173,32 @@ export class AccountController {
     @UserDecorator() user: RequestUser,
     @Param('id') id: string,
     @Body() updateAccountDto: UpdateAccountDto,
-  ): Promise<AccountDto> {
+  ): Promise<AccountWithSummaryResponseDto> {
     const account = await this.accountService.update(
       user.userId,
       id,
       updateAccountDto,
     );
-    return this.accountService.toAccountDto(account);
+    const summary = await this.accountService.getSummary(user.userId);
+    return {
+      account: this.accountService.toAccountDto(account),
+      summary,
+    };
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an account by ID' })
   @ApiResponse({
-    status: 204,
-    description: 'The account has been successfully deleted.',
+    status: 200,
+    description:
+      'The account has been successfully deleted. Returns new total balance.',
+    type: AccountSummaryDto,
   })
   @ApiResponse({ status: 404, description: 'Account not found.' })
   async remove(
     @UserDecorator() user: RequestUser,
     @Param('id') id: string,
-  ): Promise<void> {
-    await this.accountService.remove(user.userId, id);
+  ): Promise<AccountSummaryDto> {
+    return this.accountService.remove(user.userId, id);
   }
 }
