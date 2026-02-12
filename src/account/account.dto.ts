@@ -9,6 +9,7 @@ import {
   MinLength,
   MaxLength,
   IsMongoId,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
@@ -78,6 +79,16 @@ export class CreateAccountDto {
   @IsInt()
   @Min(0)
   order?: number;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether the account is excluded from the total balance',
+    required: false,
+  })
+  @Type(() => Boolean)
+  @IsOptional()
+  @IsBoolean()
+  excluded?: boolean;
 }
 
 export class UpdateAccountDto extends PartialType(CreateAccountDto) {}
@@ -109,6 +120,9 @@ export class AccountDto {
 
   @ApiProperty({ example: 1 })
   order: number;
+
+  @ApiProperty({ example: false })
+  excluded: boolean;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;

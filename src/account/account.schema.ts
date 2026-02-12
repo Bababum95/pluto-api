@@ -71,6 +71,13 @@ export class Account {
   })
   order: number; // Order for sorting accounts per user
 
+  @Prop({
+    required: true,
+    type: Boolean,
+    default: false,
+  })
+  excluded: boolean; // Whether the account is excluded from the total balance
+
   createdAt: Date;
   updatedAt: Date;
 }

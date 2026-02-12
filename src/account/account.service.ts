@@ -237,6 +237,7 @@ export class AccountService {
       currency: this.currencyService.toCurrencyDto(account.currency),
       order: account.order,
       createdAt: account.createdAt.toISOString(),
+      excluded: account.excluded ?? false,
       updatedAt: account.updatedAt.toISOString(),
     };
   }
