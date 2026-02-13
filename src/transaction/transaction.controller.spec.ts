@@ -1,0 +1,201 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+
+import type {
+  CreateTransactionDto,
+  UpdateTransactionDto,
+} from './transaction.dto';
+import { TransactionController } from './transaction.controller';
+import { TransactionService } from './transaction.service';
+import type { RequestUser } from '../auth/auth.dto';
+import { TransactionType } from './transaction.enum';
+
+jest.mock('./transaction.service', () => ({
+  TransactionService: jest.fn(),
+}));
+
+type MockedTransaction = {
+  _id: string;
+  user: string;
+  type: TransactionType;
+  category: string;
+  comment: string;
+  account: string;
+  amount: number;
+  scale: number;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+describe('TransactionController', () => {
+  let controller: TransactionController;
+  let service: {
+    create: jest.Mock;
+    findAll: jest.Mock;
+    findOne: jest.Mock;
+    update: jest.Mock;
+    remove: jest.Mock;
+    toTransactionDto: jest.Mock;
+  };
+
+  const mockUser: RequestUser = {
+    userId: '507f1f77bcf86cd799439011',
+    email: 'user@example.com',
+  };
+
+  const mockTransaction: MockedTransaction = {
+    _id: '507f1f77bcf86cd799439013',
+    user: mockUser.userId,
+    type: TransactionType.EXPENSE,
+    category: '507f1f77bcf86cd799439012',
+    comment: 'Lunch',
+    account: '507f1f77bcf86cd799439014',
+    amount: -150050,
+    scale: 2,
+    tags: ['food'],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockTransactionDto = {
+    id: mockTransaction._id,
+    type: mockTransaction.type,
+    category: mockTransaction.category,
+    comment: mockTransaction.comment,
+    account: mockTransaction.account,
+    amount: -1500.5,
+    amount_raw: mockTransaction.amount,
+    scale: mockTransaction.scale,
+    tags: mockTransaction.tags,
+    createdAt: mockTransaction.createdAt.toISOString(),
+    updatedAt: mockTransaction.updatedAt.toISOString(),
+  };
+
+  const mockCreateDto: CreateTransactionDto = {
+    type: TransactionType.EXPENSE,
+    category: '507f1f77bcf86cd799439012',
+    comment: 'Lunch',
+    account: '507f1f77bcf86cd799439014',
+    amount: -1500.5,
+    scale: 2,
+    tags: ['food'],
+  };
+
+  beforeEach(async () => {
+    const mockTransactionService = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
+      toTransactionDto: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [TransactionController],
+      providers: [
+        { provide: TransactionService, useValue: mockTransactionService },
+      ],
+    }).compile();
+
+    controller = module.get<TransactionController>(TransactionController);
+    service = module.get(TransactionService);
+    jest.clearAllMocks();
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('create', () => {
+    it('should create a transaction and return TransactionDto', async () => {
+      service.create.mockResolvedValue(mockTransaction);
+      service.toTransactionDto.mockReturnValue(mockTransactionDto);
+
+      const result = await controller.create(mockUser, mockCreateDto);
+
+      expect(service.create).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockCreateDto,
+      );
+      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction);
+      expect(result).toEqual(mockTransactionDto);
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return an array of TransactionDto for the user', async () => {
+      const list = [mockTransaction];
+      service.findAll.mockResolvedValue(list);
+      service.toTransactionDto.mockReturnValue(mockTransactionDto);
+
+      const result = await controller.findAll(mockUser);
+
+      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId);
+      expect(service.toTransactionDto).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([mockTransactionDto]);
+    });
+  });
+
+  describe('findOne', () => {
+    it('should return a TransactionDto by id', async () => {
+      service.findOne.mockResolvedValue(mockTransaction);
+      service.toTransactionDto.mockReturnValue(mockTransactionDto);
+
+      const result = await controller.findOne(mockUser, mockTransaction._id);
+
+      expect(service.findOne).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockTransaction._id,
+      );
+      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction);
+      expect(result).toEqual(mockTransactionDto);
+    });
+
+    it('should throw NotFoundException when transaction not found', async () => {
+      service.findOne.mockResolvedValue(null);
+
+      await expect(controller.findOne(mockUser, 'invalid')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('should update a transaction and return TransactionDto', async () => {
+      const updateDto: UpdateTransactionDto = { comment: 'Updated comment' };
+      const updated = { ...mockTransaction, comment: 'Updated comment' };
+      const updatedDto = { ...mockTransactionDto, comment: 'Updated comment' };
+      service.update.mockResolvedValue(updated);
+      service.toTransactionDto.mockReturnValue(updatedDto);
+
+      const result = await controller.update(
+        mockUser,
+        mockTransaction._id,
+        updateDto,
+      );
+
+      expect(service.update).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockTransaction._id,
+        updateDto,
+      );
+      expect(service.toTransactionDto).toHaveBeenCalledWith(updated);
+      expect(result).toEqual(updatedDto);
+    });
+  });
+
+  describe('remove', () => {
+    it('should remove a transaction and return void', async () => {
+      service.remove.mockResolvedValue(true);
+
+      await controller.remove(mockUser, mockTransaction._id);
+
+      expect(service.remove).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockTransaction._id,
+      );
+    });
+  });
+});
