@@ -151,6 +151,7 @@ export class CategoryService {
       color: category.color,
       icon: category.icon,
       name: category.name,
+      type: category.type,
       createdAt: category.createdAt.toISOString(),
       updatedAt: category.updatedAt.toISOString(),
     };

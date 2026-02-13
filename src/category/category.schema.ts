@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
+import { TransactionType } from '../transaction/transaction.enum';
+
 export type CategoryDocument = HydratedDocument<Category>;
 
 /**
@@ -36,6 +38,13 @@ export class Category {
     maxlength: 100,
   })
   name: string;
+
+  @Prop({
+    type: String,
+    enum: TransactionType,
+    required: true,
+  })
+  type: TransactionType;
 
   createdAt: Date;
   updatedAt: Date;

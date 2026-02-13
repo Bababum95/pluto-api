@@ -1,6 +1,14 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
+
+import { TransactionType } from '../transaction/transaction.enum';
 
 export class CreateCategoryDto {
   @ApiProperty({
@@ -22,6 +30,12 @@ export class CreateCategoryDto {
   @MinLength(1)
   @MaxLength(100)
   name: string;
+
+  @ApiProperty({ example: 'expense', description: 'Transaction type' })
+  @IsString()
+  @IsNotEmpty()
+  @IsEnum(TransactionType)
+  type: TransactionType;
 }
 
 export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}
@@ -38,6 +52,9 @@ export class CategoryDto {
 
   @ApiProperty({ example: 'Food & Dining' })
   name: string;
+
+  @ApiProperty({ example: 'expense' })
+  type: TransactionType;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;
