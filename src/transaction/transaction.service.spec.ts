@@ -1,5 +1,5 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { getModelToken } from '@nestjs/mongoose';
+import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { Types } from 'mongoose';
@@ -30,6 +30,7 @@ const createChain = (resolvedValue: unknown) => ({
   exec: jest.fn().mockResolvedValue(resolvedValue),
   lean: jest.fn().mockReturnThis(),
   sort: jest.fn().mockReturnThis(),
+  session: jest.fn().mockReturnThis(),
 });
 
 describe('TransactionService', () => {
@@ -92,11 +93,24 @@ describe('TransactionService', () => {
     };
     mockAccountModel = {
       findOne: jest.fn().mockReturnValue(createChain({ _id: accountId })),
+      updateOne: jest.fn().mockReturnValue(createChain({ modifiedCount: 1 })),
+    };
+
+    const mockSession = {
+      withTransaction: jest.fn((cb: () => Promise<unknown>) => cb()),
+      endSession: jest.fn().mockResolvedValue(undefined),
+    };
+    const mockConnection = {
+      startSession: jest.fn().mockResolvedValue(mockSession),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionService,
+        {
+          provide: getConnectionToken(),
+          useValue: mockConnection,
+        },
         {
           provide: getModelToken(Transaction.name),
           useValue: MockTransactionModelWithStatics,

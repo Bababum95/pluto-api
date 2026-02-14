@@ -18,10 +18,12 @@ import {
 } from '@nestjs/swagger';
 
 import { TransactionService } from './transaction.service';
+import { AccountService } from '../account/account.service';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionDto,
+  CreateTransactionResponseDto,
 } from './transaction.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -30,15 +32,26 @@ import type { RequestUser } from '../auth/auth.dto';
 @ApiBearerAuth()
 @Controller('transactions')
 export class TransactionController {
-  constructor(private readonly transactionService: TransactionService) {}
+  constructor(
+    private readonly transactionService: TransactionService,
+    private readonly accountService: AccountService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new transaction' })
   @ApiResponse({
     status: 201,
-    description: 'The transaction has been successfully created.',
-    type: TransactionDto,
+    description:
+      'The transaction has been successfully created. Returns transaction, updated account, and total balance summary.',
+    schema: {
+      type: 'object',
+      properties: {
+        transaction: { $ref: '#/components/schemas/TransactionDto' },
+        account: { $ref: '#/components/schemas/AccountDto' },
+        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
@@ -47,12 +60,26 @@ export class TransactionController {
   async create(
     @UserDecorator() user: RequestUser,
     @Body() createTransactionDto: CreateTransactionDto,
-  ): Promise<TransactionDto> {
+  ): Promise<CreateTransactionResponseDto> {
     const transaction = await this.transactionService.create(
       user.userId,
       createTransactionDto,
     );
-    return this.transactionService.toTransactionDto(transaction);
+    const account = await this.accountService.findOne(
+      user.userId,
+      createTransactionDto.account,
+    );
+    const summary = await this.accountService.getSummary(user.userId);
+
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+
+    return {
+      transaction: this.transactionService.toTransactionDto(transaction),
+      account: this.accountService.toAccountDto(account),
+      summary,
+    };
   }
 
   @Get()

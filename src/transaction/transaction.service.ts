@@ -4,8 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { I18nService } from 'nestjs-i18n';
 
 import { Transaction, TransactionDocument } from './transaction.schema';
@@ -16,10 +16,13 @@ import {
   UpdateTransactionDto,
   TransactionDto,
 } from './transaction.dto';
+import { TransactionType } from './transaction.enum';
 
 @Injectable()
 export class TransactionService {
   constructor(
+    @InjectConnection()
+    private readonly connection: Connection,
     @InjectModel(Transaction.name)
     private readonly transactionModel: Model<TransactionDocument>,
     @InjectModel(Category.name)
@@ -28,16 +31,6 @@ export class TransactionService {
     private readonly accountModel: Model<AccountDocument>,
     private readonly i18n: I18nService,
   ) {}
-
-  /**
-   * Convert decimal amount to minor units (e.g. 1500.50 with scale 2 -> 150050).
-   */
-  private toMinorUnits(amount: number, scale: number): number {
-    return new Decimal(amount)
-      .mul(new Decimal(10).pow(scale))
-      .round()
-      .toNumber();
-  }
 
   /**
    * Convert minor units to decimal amount (e.g. 150050 with scale 2 -> 1500.50).
@@ -97,36 +90,60 @@ export class TransactionService {
       createTransactionDto.account,
     );
 
-    const amountRaw = this.toMinorUnits(
-      createTransactionDto.amount,
-      createTransactionDto.scale,
-    );
+    const session = await this.connection.startSession();
+    try {
+      const created = await session.withTransaction(async () => {
+        const transaction = new this.transactionModel({
+          user: new Types.ObjectId(userId),
+          type: createTransactionDto.type,
+          category: new Types.ObjectId(createTransactionDto.category),
+          comment: createTransactionDto.comment?.trim() ?? '',
+          account: new Types.ObjectId(createTransactionDto.account),
+          amount: createTransactionDto.amount,
+          scale: createTransactionDto.scale,
+          tags: (createTransactionDto.tags ?? [])
+            .map((t) => t.trim())
+            .filter(Boolean),
+        });
 
-    const transaction = new this.transactionModel({
-      user: new Types.ObjectId(userId),
-      type: createTransactionDto.type,
-      category: new Types.ObjectId(createTransactionDto.category),
-      comment: createTransactionDto.comment?.trim() ?? '',
-      account: new Types.ObjectId(createTransactionDto.account),
-      amount: amountRaw,
-      scale: createTransactionDto.scale,
-      tags: (createTransactionDto.tags ?? [])
-        .map((t) => t.trim())
-        .filter(Boolean),
-    });
+        await transaction.save({ session });
 
-    await transaction.save();
-    const created = await this.transactionModel
-      .findById(transaction._id)
-      .exec();
-    if (!created) {
-      throw new Error(
-        this.i18n.t('transaction.create.failed', {
-          defaultValue: 'Transaction creation failed',
-        }),
-      );
+        // Determine signed amount based on transaction type
+        const signedAmount =
+          createTransactionDto.type === TransactionType.EXPENSE
+            ? -createTransactionDto.amount
+            : createTransactionDto.amount;
+
+        await this.accountModel
+          .updateOne(
+            {
+              _id: createTransactionDto.account,
+              user: new Types.ObjectId(userId),
+            },
+            { $inc: { balance: signedAmount } },
+            { session },
+          )
+          .exec();
+
+        const result = await this.transactionModel
+          .findById(transaction._id)
+          .session(session)
+          .exec();
+
+        if (!result) {
+          throw new Error(
+            this.i18n.t('transaction.create.failed', {
+              defaultValue: 'Transaction creation failed',
+            }),
+          );
+        }
+
+        return result;
+      });
+      return created as TransactionDocument;
+    } finally {
+      await session.endSession();
     }
-    return created;
   }
 
   async findAll(userId: string): Promise<TransactionDocument[]> {
@@ -192,10 +209,7 @@ export class TransactionService {
       updateTransactionDto.amount !== undefined &&
       updateTransactionDto.scale !== undefined
     ) {
-      updateData.amount = this.toMinorUnits(
-        updateTransactionDto.amount,
-        updateTransactionDto.scale,
-      );
+      updateData.amount = updateTransactionDto.amount;
     } else if (updateTransactionDto.amount !== undefined) {
       const existing = await this.transactionModel
         .findOne({ _id: id, user: new Types.ObjectId(userId) })
@@ -207,10 +221,7 @@ export class TransactionService {
           }),
         );
       }
-      updateData.amount = this.toMinorUnits(
-        updateTransactionDto.amount,
-        existing.scale,
-      );
+      updateData.amount = updateTransactionDto.amount;
     }
 
     const transaction = await this.transactionModel

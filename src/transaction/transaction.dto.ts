@@ -17,6 +17,7 @@ import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 
 import { TransactionType } from './transaction.enum';
+import type { AccountDto, AccountSummaryDto } from '../account/account.dto';
 
 export class CreateTransactionDto {
   @ApiProperty({ example: 'expense', enum: TransactionType })
@@ -113,3 +114,9 @@ export class TransactionDto {
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   updatedAt: string;
 }
+
+export type CreateTransactionResponseDto = {
+  transaction: TransactionDto;
+  account: AccountDto;
+  summary: AccountSummaryDto;
+};

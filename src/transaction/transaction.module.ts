@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Transaction, TransactionSchema } from './transaction.schema';
 import { Category, CategorySchema } from '../category/category.schema';
 import { Account, AccountSchema } from '../account/account.schema';
+import { AccountModule } from '../account/account.module';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
 
@@ -14,6 +15,7 @@ import { TransactionService } from './transaction.service';
       { name: Category.name, schema: CategorySchema },
       { name: Account.name, schema: AccountSchema },
     ]),
+    AccountModule,
   ],
   controllers: [TransactionController],
   providers: [TransactionService],

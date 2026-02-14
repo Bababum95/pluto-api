@@ -7,6 +7,7 @@ import type {
 } from './transaction.dto';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
+import { AccountService } from '../account/account.service';
 import type { RequestUser } from '../auth/auth.dto';
 import { TransactionType } from './transaction.enum';
 
@@ -37,6 +38,11 @@ describe('TransactionController', () => {
     update: jest.Mock;
     remove: jest.Mock;
     toTransactionDto: jest.Mock;
+  };
+  let accountService: {
+    findOne: jest.Mock;
+    getSummary: jest.Mock;
+    toAccountDto: jest.Mock;
   };
 
   const mockUser: RequestUser = {
@@ -72,6 +78,28 @@ describe('TransactionController', () => {
     updatedAt: mockTransaction.updatedAt.toISOString(),
   };
 
+  const mockAccountDto = {
+    id: mockTransaction.account,
+    name: 'Main Wallet',
+    balance: 1000.5,
+    balance_raw: 100050,
+    scale: 2,
+    color: '#FF5733',
+    icon: 'wallet',
+    currency: { id: 'cur1', code: 'USD', symbol: '$' },
+    order: 0,
+    excluded: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const mockSummaryDto = {
+    total_raw: 154327,
+    total: 1543.27,
+    scale: 2,
+    currency: { id: 'cur1', code: 'USD', symbol: '$' },
+  };
+
   const mockCreateDto: CreateTransactionDto = {
     type: TransactionType.EXPENSE,
     category: '507f1f77bcf86cd799439012',
@@ -92,15 +120,23 @@ describe('TransactionController', () => {
       toTransactionDto: jest.fn(),
     };
 
+    const mockAccountService = {
+      findOne: jest.fn(),
+      getSummary: jest.fn(),
+      toAccountDto: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
         { provide: TransactionService, useValue: mockTransactionService },
+        { provide: AccountService, useValue: mockAccountService },
       ],
     }).compile();
 
     controller = module.get<TransactionController>(TransactionController);
     service = module.get(TransactionService);
+    accountService = module.get(AccountService);
     jest.clearAllMocks();
   });
 
@@ -109,9 +145,13 @@ describe('TransactionController', () => {
   });
 
   describe('create', () => {
-    it('should create a transaction and return TransactionDto', async () => {
+    it('should create a transaction and return transaction, account, and summary', async () => {
+      const mockAccount = { _id: mockTransaction.account, balance: 100050 };
       service.create.mockResolvedValue(mockTransaction);
       service.toTransactionDto.mockReturnValue(mockTransactionDto);
+      accountService.findOne.mockResolvedValue(mockAccount);
+      accountService.getSummary.mockResolvedValue(mockSummaryDto);
+      accountService.toAccountDto.mockReturnValue(mockAccountDto);
 
       const result = await controller.create(mockUser, mockCreateDto);
 
@@ -120,7 +160,17 @@ describe('TransactionController', () => {
         mockCreateDto,
       );
       expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction);
-      expect(result).toEqual(mockTransactionDto);
+      expect(accountService.findOne).toHaveBeenCalledWith(
+        mockUser.userId,
+        mockCreateDto.account,
+      );
+      expect(accountService.getSummary).toHaveBeenCalledWith(mockUser.userId);
+      expect(accountService.toAccountDto).toHaveBeenCalledWith(mockAccount);
+      expect(result).toEqual({
+        transaction: mockTransactionDto,
+        account: mockAccountDto,
+        summary: mockSummaryDto,
+      });
     });
   });
 
