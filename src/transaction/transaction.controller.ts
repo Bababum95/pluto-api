@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -19,11 +20,14 @@ import {
 
 import { TransactionService } from './transaction.service';
 import { AccountService } from '../account/account.service';
+import { SettingsService } from '../settings/settings.service';
+import { RateService } from '../rate/rate.service';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionDto,
   CreateTransactionResponseDto,
+  TransactionFilterDto,
 } from './transaction.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -35,6 +39,8 @@ export class TransactionController {
   constructor(
     private readonly transactionService: TransactionService,
     private readonly accountService: AccountService,
+    private readonly settingsService: SettingsService,
+    private readonly rateService: RateService,
   ) {}
 
   @Post()
@@ -75,23 +81,44 @@ export class TransactionController {
       throw new NotFoundException('Account not found');
     }
 
+    const settings = await this.settingsService.findByUserId(user.userId);
+    const rates = await this.rateService.getLatestValidRate();
+
     return {
-      transaction: this.transactionService.toTransactionDto(transaction),
-      account: this.accountService.toAccountDto(account),
       summary,
+      account: this.accountService.toAccountDto(account),
+      transaction: this.transactionService.toTransactionDto(transaction, {
+        settings,
+        rates,
+      }),
     };
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all transactions for the current user' })
+  @ApiOperation({
+    summary: 'Get all transactions for the current user',
+    description:
+      'Optional query filters: dateFrom, dateTo (period), type, category, account. Any combination is supported.',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of all transactions for the current user.',
     type: [TransactionDto],
   })
-  async findAll(@UserDecorator() user: RequestUser): Promise<TransactionDto[]> {
-    const transactions = await this.transactionService.findAll(user.userId);
-    return transactions.map((t) => this.transactionService.toTransactionDto(t));
+  async findAll(
+    @UserDecorator() user: RequestUser,
+    @Query() filters: TransactionFilterDto,
+  ): Promise<TransactionDto[]> {
+    const transactions = await this.transactionService.findAll(
+      user.userId,
+      filters,
+    );
+    const settings = await this.settingsService.findByUserId(user.userId);
+    const rates = await this.rateService.getLatestValidRate();
+    const options = { settings, rates };
+    return transactions.map((t) =>
+      this.transactionService.toTransactionDto(t, options),
+    );
   }
 
   @Get(':id')
@@ -110,7 +137,12 @@ export class TransactionController {
     if (!transaction) {
       throw new NotFoundException('Transaction not found');
     }
-    return this.transactionService.toTransactionDto(transaction);
+    const settings = await this.settingsService.findByUserId(user.userId);
+    const rates = await this.rateService.getLatestValidRate();
+    return this.transactionService.toTransactionDto(transaction, {
+      settings,
+      rates,
+    });
   }
 
   @Patch(':id')
@@ -132,7 +164,12 @@ export class TransactionController {
       id,
       updateTransactionDto,
     );
-    return this.transactionService.toTransactionDto(transaction);
+    const settings = await this.settingsService.findByUserId(user.userId);
+    const rates = await this.rateService.getLatestValidRate();
+    return this.transactionService.toTransactionDto(transaction, {
+      settings,
+      rates,
+    });
   }
 
   @Delete(':id')

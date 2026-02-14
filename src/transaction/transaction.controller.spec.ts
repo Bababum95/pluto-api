@@ -8,8 +8,10 @@ import type {
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
 import { AccountService } from '../account/account.service';
-import type { RequestUser } from '../auth/auth.dto';
+import { SettingsService } from '../settings/settings.service';
+import { RateService } from '../rate/rate.service';
 import { TransactionType } from './transaction.enum';
+import type { RequestUser } from '../auth/auth.dto';
 
 jest.mock('./transaction.service', () => ({
   TransactionService: jest.fn(),
@@ -29,6 +31,13 @@ type MockedTransaction = {
   updatedAt: Date;
 };
 
+const moneyView = (value: number, raw: number, scale: number) => ({
+  value,
+  raw,
+  scale,
+  currency: { code: 'USD', symbol: '$' },
+});
+
 describe('TransactionController', () => {
   let controller: TransactionController;
   let service: {
@@ -44,6 +53,8 @@ describe('TransactionController', () => {
     getSummary: jest.Mock;
     toAccountDto: jest.Mock;
   };
+  let _settingsService: { findByUserId: jest.Mock };
+  let _rateService: { getLatestValidRate: jest.Mock };
 
   const mockUser: RequestUser = {
     userId: '507f1f77bcf86cd799439011',
@@ -64,22 +75,18 @@ describe('TransactionController', () => {
     updatedAt: new Date(),
   };
 
-  const mockTransactionDto = {
-    id: mockTransaction._id,
-    type: mockTransaction.type,
-    category: mockTransaction.category,
-    comment: mockTransaction.comment,
-    account: mockTransaction.account,
-    amount: -1500.5,
-    amount_raw: mockTransaction.amount,
-    scale: mockTransaction.scale,
-    tags: mockTransaction.tags,
-    createdAt: mockTransaction.createdAt.toISOString(),
-    updatedAt: mockTransaction.updatedAt.toISOString(),
+  const mockCategoryDto = {
+    id: mockTransaction.category.toString(),
+    name: 'Food & Dining',
+    color: '#FF5733',
+    icon: 'wallet',
+    type: 'expense',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   const mockAccountDto = {
-    id: mockTransaction.account,
+    id: mockTransaction.account.toString(),
     name: 'Main Wallet',
     balance: 1000.5,
     balance_raw: 100050,
@@ -91,6 +98,21 @@ describe('TransactionController', () => {
     excluded: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  };
+
+  const mockTransactionDto = {
+    id: mockTransaction._id,
+    type: mockTransaction.type,
+    category: mockCategoryDto,
+    comment: mockTransaction.comment,
+    account: mockAccountDto,
+    amount: {
+      original: moneyView(-1500.5, mockTransaction.amount, 2),
+      converted: moneyView(-1500.5, mockTransaction.amount, 2),
+    },
+    tags: mockTransaction.tags,
+    createdAt: mockTransaction.createdAt.toISOString(),
+    updatedAt: mockTransaction.updatedAt.toISOString(),
   };
 
   const mockSummaryDto = {
@@ -126,17 +148,28 @@ describe('TransactionController', () => {
       toAccountDto: jest.fn(),
     };
 
+    const mockSettingsService = {
+      findByUserId: jest.fn().mockResolvedValue(null),
+    };
+    const mockRateService = {
+      getLatestValidRate: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TransactionController],
       providers: [
         { provide: TransactionService, useValue: mockTransactionService },
         { provide: AccountService, useValue: mockAccountService },
+        { provide: SettingsService, useValue: mockSettingsService },
+        { provide: RateService, useValue: mockRateService },
       ],
     }).compile();
 
     controller = module.get<TransactionController>(TransactionController);
     service = module.get(TransactionService);
     accountService = module.get(AccountService);
+    _settingsService = module.get(SettingsService);
+    _rateService = module.get(RateService);
     jest.clearAllMocks();
   });
 
@@ -159,7 +192,10 @@ describe('TransactionController', () => {
         mockUser.userId,
         mockCreateDto,
       );
-      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction);
+      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction, {
+        settings: null,
+        rates: [],
+      });
       expect(accountService.findOne).toHaveBeenCalledWith(
         mockUser.userId,
         mockCreateDto.account,
@@ -180,10 +216,14 @@ describe('TransactionController', () => {
       service.findAll.mockResolvedValue(list);
       service.toTransactionDto.mockReturnValue(mockTransactionDto);
 
-      const result = await controller.findAll(mockUser);
+      const result = await controller.findAll(mockUser, {});
 
-      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId);
+      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId, {});
       expect(service.toTransactionDto).toHaveBeenCalledTimes(1);
+      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction, {
+        settings: null,
+        rates: [],
+      });
       expect(result).toEqual([mockTransactionDto]);
     });
   });
@@ -199,7 +239,10 @@ describe('TransactionController', () => {
         mockUser.userId,
         mockTransaction._id,
       );
-      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction);
+      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction, {
+        settings: null,
+        rates: [],
+      });
       expect(result).toEqual(mockTransactionDto);
     });
 
@@ -231,7 +274,10 @@ describe('TransactionController', () => {
         mockTransaction._id,
         updateDto,
       );
-      expect(service.toTransactionDto).toHaveBeenCalledWith(updated);
+      expect(service.toTransactionDto).toHaveBeenCalledWith(updated, {
+        settings: null,
+        rates: [],
+      });
       expect(result).toEqual(updatedDto);
     });
   });

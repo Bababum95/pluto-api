@@ -7,12 +7,17 @@ import { Types } from 'mongoose';
 import { Transaction, TransactionDocument } from './transaction.schema';
 import { Category } from '../category/category.schema';
 import { Account } from '../account/account.schema';
-import { TransactionService } from './transaction.service';
+import {
+  TransactionService,
+  type TransactionDocumentPopulated,
+} from './transaction.service';
+import { TransactionType } from './transaction.enum';
+import { CategoryService } from '../category/category.service';
+import { AccountService } from '../account/account.service';
 import type {
   CreateTransactionDto,
   UpdateTransactionDto,
 } from './transaction.dto';
-import { TransactionType } from './transaction.enum';
 
 const mockI18nService = {
   t: (key: string, options?: { defaultValue?: string }): string => {
@@ -31,6 +36,7 @@ const createChain = (resolvedValue: unknown) => ({
   lean: jest.fn().mockReturnThis(),
   sort: jest.fn().mockReturnThis(),
   session: jest.fn().mockReturnThis(),
+  populate: jest.fn().mockReturnThis(),
 });
 
 describe('TransactionService', () => {
@@ -43,13 +49,37 @@ describe('TransactionService', () => {
     findOneAndDelete: jest.Mock;
   };
   let mockCategoryModel: { findOne: jest.Mock };
-  let mockAccountModel: { findOne: jest.Mock };
+  let mockAccountModel: { findOne: jest.Mock; updateOne: jest.Mock };
   let saveMock: jest.Mock;
 
   const userId = '507f1f77bcf86cd799439011';
   const transactionId = new Types.ObjectId('507f1f77bcf86cd799439013');
   const categoryId = new Types.ObjectId('507f1f77bcf86cd799439012');
   const accountId = new Types.ObjectId('507f1f77bcf86cd799439014');
+
+  const mockCategoryDoc = {
+    _id: categoryId,
+    name: 'Food & Dining',
+    color: '#FF5733',
+    icon: 'wallet',
+    type: TransactionType.EXPENSE,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockAccountDoc = {
+    _id: accountId,
+    name: 'Main Wallet',
+    balance: 100050,
+    scale: 2,
+    color: '#FF5733',
+    icon: 'wallet',
+    currency: { _id: new Types.ObjectId(), code: 'USD', symbol: '$' },
+    order: 0,
+    excluded: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   const mockTransaction = {
     _id: transactionId,
@@ -64,6 +94,12 @@ describe('TransactionService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   } as unknown as TransactionDocument;
+
+  const mockTransactionPopulated = {
+    ...mockTransaction,
+    category: mockCategoryDoc,
+    account: mockAccountDoc,
+  } as unknown as TransactionDocumentPopulated;
 
   beforeEach(async () => {
     saveMock = jest.fn().mockResolvedValue(undefined);
@@ -127,6 +163,47 @@ describe('TransactionService', () => {
           provide: I18nService,
           useValue: mockI18nService,
         },
+        {
+          provide: CategoryService,
+          useValue: {
+            toCategoryDto: jest
+              .fn()
+              .mockImplementation(
+                (cat: { _id: Types.ObjectId; name: string }) => ({
+                  id: cat._id.toString(),
+                  name: cat.name,
+                  color: '#FF5733',
+                  icon: 'wallet',
+                  type: 'expense',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }),
+              ),
+          },
+        },
+        {
+          provide: AccountService,
+          useValue: {
+            toAccountDto: jest
+              .fn()
+              .mockImplementation(
+                (acc: { _id: Types.ObjectId; name: string }) => ({
+                  id: acc._id.toString(),
+                  name: acc.name,
+                  balance: 1000.5,
+                  balance_raw: 100050,
+                  scale: 2,
+                  color: '#FF5733',
+                  icon: 'wallet',
+                  currency: { id: 'cur1', code: 'USD', symbol: '$' },
+                  order: 0,
+                  excluded: false,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }),
+              ),
+          },
+        },
       ],
     }).compile();
 
@@ -137,7 +214,9 @@ describe('TransactionService', () => {
     mockAccountModel.findOne.mockReturnValue(createChain({ _id: accountId }));
     mockTransactionModel.findOne.mockReturnValue(createChain(null));
     mockTransactionModel.find.mockReturnValue(createChain([]));
-    mockTransactionModel.findById.mockReturnValue(createChain(mockTransaction));
+    mockTransactionModel.findById.mockReturnValue(
+      createChain(mockTransactionPopulated),
+    );
     mockTransactionModel.findOneAndUpdate.mockReturnValue(
       createChain(mockTransaction),
     );
@@ -173,7 +252,7 @@ describe('TransactionService', () => {
         user: new Types.ObjectId(userId),
       });
       expect(saveMock).toHaveBeenCalled();
-      expect(result).toEqual(mockTransaction);
+      expect(result).toEqual(mockTransactionPopulated);
     });
 
     it('should throw BadRequestException when category not found', async () => {
@@ -257,8 +336,15 @@ describe('TransactionService', () => {
     it('should update a transaction and return it', async () => {
       const updateDto: UpdateTransactionDto = { comment: 'Updated comment' };
       const updated = { ...mockTransaction, comment: 'Updated comment' };
+      const expectedPopulated = {
+        ...mockTransactionPopulated,
+        comment: 'Updated comment',
+      };
       mockTransactionModel.findOneAndUpdate.mockReturnValue(
         createChain(updated),
+      );
+      mockTransactionModel.findById.mockReturnValue(
+        createChain(expectedPopulated),
       );
 
       const result = await service.update(
@@ -275,7 +361,7 @@ describe('TransactionService', () => {
         expect.objectContaining({ comment: 'Updated comment' }),
         { new: true },
       );
-      expect(result).toEqual(updated);
+      expect(result).toEqual(expectedPopulated);
     });
 
     it('should throw NotFoundException when transaction not found', async () => {
@@ -312,17 +398,28 @@ describe('TransactionService', () => {
   });
 
   describe('toTransactionDto', () => {
-    it('should convert TransactionDocument to TransactionDto', () => {
-      const dto = service.toTransactionDto(mockTransaction);
+    it('should convert populated TransactionDocument to TransactionDto with category and account DTOs', () => {
+      const dto = service.toTransactionDto(mockTransactionPopulated, {
+        settings: null,
+        rates: [],
+      });
 
       expect(dto.id).toBe(mockTransaction._id.toString());
       expect(dto.type).toBe(mockTransaction.type);
-      expect(dto.category).toBe(mockTransaction.category.toString());
+      expect(dto.category).toEqual(
+        expect.objectContaining({
+          id: categoryId.toString(),
+          name: 'Food & Dining',
+        }),
+      );
       expect(dto.comment).toBe(mockTransaction.comment);
-      expect(dto.account).toBe(mockTransaction.account.toString());
-      expect(dto.amount).toBe(-1500.5);
-      expect(dto.amount_raw).toBe(mockTransaction.amount);
-      expect(dto.scale).toBe(mockTransaction.scale);
+      expect(dto.amount.original.value).toBe(-1500.5);
+      expect(dto.amount.original.raw).toBe(mockTransaction.amount);
+      expect(dto.amount.original.scale).toBe(mockTransaction.scale);
+      expect(dto.amount.original.currency).toEqual(
+        expect.objectContaining({ code: 'USD', symbol: '$' }),
+      );
+      expect(dto.amount.converted).toEqual(dto.amount.original);
       expect(dto.tags).toEqual(mockTransaction.tags);
       expect(dto.createdAt).toBe(mockTransaction.createdAt.toISOString());
       expect(dto.updatedAt).toBe(mockTransaction.updatedAt.toISOString());

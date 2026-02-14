@@ -11,13 +11,98 @@ import {
   IsOptional,
   IsArray,
   MinLength,
+  IsDateString,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 
+import { AccountDto, AccountSummaryDto } from '../account/account.dto';
+import { CategoryDto } from '../category/category.dto';
+
 import { TransactionType } from './transaction.enum';
-import type { AccountDto, AccountSummaryDto } from '../account/account.dto';
+
+/** Currency view for money display (code and symbol). */
+export class MoneyViewCurrencyDto {
+  @ApiProperty({ example: 'USD' })
+  code: string;
+
+  @ApiProperty({ example: '$' })
+  symbol: string;
+
+  @ApiProperty({ example: 2 })
+  decimal_digits: number;
+}
+
+/** Money value with decimal representation and currency. */
+export class MoneyViewDto {
+  @ApiProperty({ example: -1500.5, description: 'Amount in decimal form' })
+  value: number;
+
+  @ApiProperty({ example: -150050, description: 'Amount in minor units' })
+  raw: number;
+
+  @ApiProperty({ example: 2, description: 'Decimal places (scale)' })
+  scale: number;
+
+  @ApiProperty({ type: MoneyViewCurrencyDto })
+  currency: MoneyViewCurrencyDto;
+}
+
+/** Transaction amount: original (account currency) and converted (e.g. user/base currency). */
+export class TransactionAmountViewDto {
+  @ApiProperty({
+    type: MoneyViewDto,
+    description: 'Amount in transaction (account) currency',
+  })
+  original: MoneyViewDto;
+
+  @ApiProperty({
+    type: MoneyViewDto,
+    description: 'Amount in converted (e.g. base) currency',
+  })
+  converted: MoneyViewDto;
+}
+
+/** Optional query filters for listing transactions. Any combination is allowed. */
+export class TransactionFilterDto {
+  @ApiPropertyOptional({
+    example: '2024-01-01',
+    description: 'Start of period (inclusive). ISO date or datetime.',
+  })
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional({
+    example: '2024-12-31',
+    description: 'End of period (inclusive). ISO date or datetime.',
+  })
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @ApiPropertyOptional({ example: 'expense', enum: TransactionType })
+  @IsOptional()
+  @IsEnum(TransactionType)
+  type?: TransactionType;
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Filter by category ID.',
+  })
+  @IsOptional()
+  @IsMongoId()
+  category?: string;
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439012',
+    description: 'Filter by account ID.',
+  })
+  @IsOptional()
+  @IsMongoId()
+  account?: string;
+}
 
 export class CreateTransactionDto {
   @ApiProperty({ example: 'expense', enum: TransactionType })
@@ -87,23 +172,17 @@ export class TransactionDto {
   @ApiProperty({ example: 'expense', enum: TransactionType })
   type: TransactionType;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  category: string;
+  @ApiProperty({ description: 'Category data', type: CategoryDto })
+  category: CategoryDto;
 
   @ApiProperty({ example: 'Lunch at cafe' })
   comment: string;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439012' })
-  account: string;
-
-  @ApiProperty({ example: -1500.5, description: 'Amount in decimal form' })
-  amount: number;
-
-  @ApiProperty({ example: -150050, description: 'Amount in minor units' })
-  amount_raw: number;
-
-  @ApiProperty({ example: 2 })
-  scale: number;
+  @ApiProperty({
+    type: TransactionAmountViewDto,
+    description: 'Amount: original (account currency) and converted',
+  })
+  amount: TransactionAmountViewDto;
 
   @ApiProperty({ example: ['food', 'restaurant'] })
   tags: string[];
