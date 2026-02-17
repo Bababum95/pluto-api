@@ -136,6 +136,20 @@ describe('SettingsService', () => {
       toAccountDto: jest.fn((a: AccountDocument) => ({
         id: a._id.toString(),
         name: a.name,
+        balance: {
+          original: {
+            value: 0,
+            raw: 0,
+            scale: 2,
+            currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+          },
+          converted: {
+            value: 0,
+            raw: 0,
+            scale: 2,
+            currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+          },
+        },
       })),
     };
 

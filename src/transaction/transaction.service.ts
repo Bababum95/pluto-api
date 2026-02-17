@@ -8,21 +8,23 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { I18nService } from 'nestjs-i18n';
 
-import { Transaction, TransactionDocument } from './transaction.schema';
 import { Category, CategoryDocument } from '../category/category.schema';
 import { Account, AccountDocument } from '../account/account.schema';
+import { TransactionType } from './transaction.enum';
+import { CategoryService } from '../category/category.service';
+import { AccountService } from '../account/account.service';
+import { MoneyService } from '../money/money.service';
+import { MoneyViewDto } from '../money/money.dto';
+import type { Rate } from '../rate/rate.schema';
+import type { CurrencyDocument } from '../currency/currency.schema';
+
+import { Transaction, TransactionDocument } from './transaction.schema';
 import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionDto,
-  MoneyViewDto,
   TransactionFilterDto,
 } from './transaction.dto';
-import { TransactionType } from './transaction.enum';
-import { CategoryService } from '../category/category.service';
-import { AccountService } from '../account/account.service';
-import type { Rate } from '../rate/rate.schema';
-import type { CurrencyDocument } from '../currency/currency.schema';
 
 /** Options for toTransactionDto: settings (with optional currency) and rates for conversion. */
 export type ToTransactionDtoOptions = {
@@ -53,71 +55,8 @@ export class TransactionService {
     private readonly categoryService: CategoryService,
     private readonly accountService: AccountService,
     private readonly i18n: I18nService,
+    private readonly moneyService: MoneyService,
   ) {}
-
-  /**
-   * Convert minor units to decimal amount (e.g. 150050 with scale 2 -> 1500.50).
-   */
-  private fromMinorUnits(amountRaw: number, scale: number): number {
-    return new Decimal(amountRaw).div(new Decimal(10).pow(scale)).toNumber();
-  }
-
-  /**
-   * Convert amount from source currency to target using rates (rate = units per 1 USD).
-   * Returns converted value and raw in minor units, or null if conversion not possible.
-   */
-  private convertAmount(
-    amountDecimal: Decimal,
-    sourceCode: string,
-    rates: Rate[],
-    targetCurrency?: CurrencyDocument,
-  ): MoneyViewDto | null {
-    // No conversion when no target or no rates (keep original amount)
-    if (rates.length === 0) return null;
-
-    const rateMap = new Map<string, Decimal>(
-      rates.map((r) => [r.code, new Decimal(r.value)]),
-    );
-
-    // Source -> USD
-    let amountInUSD: Decimal;
-    if (sourceCode === 'USD') {
-      amountInUSD = amountDecimal;
-    } else {
-      const sourceRate = rateMap.get(sourceCode);
-      if (!sourceRate) return null;
-      amountInUSD = amountDecimal.div(sourceRate);
-    }
-
-    // USD -> target
-    let amountInTarget: Decimal;
-    if (targetCurrency?.code === 'USD') {
-      amountInTarget = amountInUSD;
-    } else {
-      const targetRate = rateMap.get(targetCurrency?.code ?? '');
-      if (!targetRate) return null;
-      amountInTarget = amountInUSD.mul(targetRate);
-    }
-
-    const scale = targetCurrency?.decimal_digits ?? 0;
-
-    const rounded = amountInTarget.toDecimalPlaces(
-      scale,
-      Decimal.ROUND_HALF_UP,
-    );
-    const raw = rounded.mul(new Decimal(10).pow(scale)).toNumber();
-
-    return {
-      value: rounded.toNumber(),
-      raw,
-      scale,
-      currency: {
-        code: targetCurrency?.code ?? 'USD',
-        symbol: targetCurrency?.symbol ?? '$',
-        decimal_digits: targetCurrency?.decimal_digits ?? 0,
-      },
-    };
-  }
 
   private async validateCategoryBelongsToUser(
     userId: string,
@@ -413,21 +352,24 @@ export class TransactionService {
       );
     }
 
-    const value = this.fromMinorUnits(transaction.amount, transaction.scale);
+    const value = this.moneyService.fromMinorUnits(
+      transaction.amount,
+      transaction.scale,
+    );
     const moneyOriginal: MoneyViewDto = {
       value,
       raw: transaction.amount,
       scale: transaction.scale,
       currency: {
-        code: account.currency.code,
-        symbol: account.currency.symbol,
-        decimal_digits: account.currency.decimal_digits,
+        code: account.balance.original.currency.code,
+        symbol: account.balance.original.currency.symbol,
+        decimal_digits: account.balance.original.currency.decimal_digits,
       },
     };
 
-    const converted = this.convertAmount(
+    const converted = this.moneyService.convertAmount(
       new Decimal(value),
-      account.currency.code,
+      account.balance.original.currency.code,
       options.rates,
       options.settings?.currency,
     );

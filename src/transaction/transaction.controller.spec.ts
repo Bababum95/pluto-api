@@ -88,12 +88,22 @@ describe('TransactionController', () => {
   const mockAccountDto = {
     id: mockTransaction.account.toString(),
     name: 'Main Wallet',
-    balance: 1000.5,
-    balance_raw: 100050,
-    scale: 2,
+    balance: {
+      original: {
+        value: 1000.5,
+        raw: 100050,
+        scale: 2,
+        currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+      },
+      converted: {
+        value: 1000.5,
+        raw: 100050,
+        scale: 2,
+        currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+      },
+    },
     color: '#FF5733',
     icon: 'wallet',
-    currency: { id: 'cur1', code: 'USD', symbol: '$' },
     order: 0,
     excluded: false,
     createdAt: new Date().toISOString(),

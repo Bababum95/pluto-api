@@ -11,19 +11,22 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { I18nService } from 'nestjs-i18n';
 
-import { Account, AccountDocument } from './account.schema';
 import { Currency, CurrencyDocument } from '../currency/currency.schema';
 import { CurrencyService } from '../currency/currency.service';
 import { RateService } from '../rate/rate.service';
 import { SettingsService } from '../settings/settings.service';
+import { Rate } from '../rate/rate.schema';
+import { MoneyService } from '../money/money.service';
+
+import { Account, AccountDocument } from './account.schema';
 import {
   CreateAccountDto,
   UpdateAccountDto,
   AccountDto,
+  AccountBalanceViewDto,
   AccountSummaryDto,
   AccountListResponseDto,
 } from './account.dto';
-import { Rate } from 'src/rate/rate.schema';
 
 @Injectable()
 export class AccountService {
@@ -37,14 +40,8 @@ export class AccountService {
     @Inject(forwardRef(() => SettingsService))
     private readonly settingsService: SettingsService,
     private readonly i18n: I18nService,
+    private readonly moneyService: MoneyService,
   ) {}
-
-  /**
-   * Convert minor units to decimal balance (e.g., 100050 cents -> 1000.50 USD)
-   */
-  private fromMinorUnits(balance: number, scale: number): number {
-    return new Decimal(balance).div(new Decimal(10).pow(scale)).toNumber();
-  }
 
   async create(
     userId: string,
@@ -258,16 +255,42 @@ export class AccountService {
     return this.getSummary(userId);
   }
 
-  toAccountDto(account: AccountDocument): AccountDto {
+  toAccountDto(
+    account: AccountDocument,
+    conversionContext?: { rates: Rate[]; targetCurrency: CurrencyDocument },
+  ): AccountDto {
+    const original = {
+      value: this.moneyService.fromMinorUnits(account.balance, account.scale),
+      raw: account.balance,
+      scale: account.scale,
+      currency: this.currencyService.toCurrencyDto(account.currency),
+    };
+
+    let converted: AccountDto['balance']['converted'];
+    if (conversionContext) {
+      const amountDecimal = this.moneyService.fromMinorUnitsDecimal(
+        account.balance,
+        account.scale,
+      );
+      const convertedView = this.moneyService.convertAmount(
+        amountDecimal,
+        account.currency.code,
+        conversionContext.rates,
+        conversionContext.targetCurrency,
+      );
+      converted = convertedView ?? original;
+    } else {
+      converted = original;
+    }
+
+    const balance: AccountBalanceViewDto = { original, converted };
+
     return {
       id: account._id.toString(),
       color: account.color,
       icon: account.icon,
       name: account.name,
-      balance: this.fromMinorUnits(account.balance, account.scale),
-      balance_raw: account.balance,
-      scale: account.scale,
-      currency: this.currencyService.toCurrencyDto(account.currency),
+      balance,
       order: account.order,
       createdAt: account.createdAt.toISOString(),
       excluded: account.excluded ?? false,
@@ -284,60 +307,44 @@ export class AccountService {
     rates: Rate[],
     targetCurrency: CurrencyDocument,
   ): AccountSummaryDto {
-    const rateMap = new Map<string, Decimal>(
-      rates.map((r) => [r.code, new Decimal(r.value)]),
-    );
-
     let totalInUSD = new Decimal(0);
 
     for (const account of accounts) {
-      // Convert account balance from minor units to decimal
-      const accountAmount = new Decimal(account.balance).div(
-        new Decimal(10).pow(account.scale),
+      const accountAmountDecimal = this.moneyService.fromMinorUnitsDecimal(
+        account.balance,
+        account.scale,
       );
 
-      const code = account.currency.code;
+      const amountInUSD = this.moneyService.toUSD(
+        accountAmountDecimal,
+        account.currency.code,
+        rates,
+      );
 
-      if (code === 'USD') {
-        totalInUSD = totalInUSD.plus(accountAmount);
-        continue;
+      if (!amountInUSD) {
+        throw new Error(`Rate not found for currency ${account.currency.code}`);
       }
 
-      const rate = rateMap.get(code);
-      if (!rate) {
-        throw new Error(`Rate not found for currency ${code}`);
-      }
-
-      // Convert to USD: divide by rate (rate = currency per 1 USD)
-      const amountInUSD = accountAmount.div(rate);
       totalInUSD = totalInUSD.plus(amountInUSD);
     }
 
-    // Convert from USD to target currency
-    let totalInTarget: Decimal;
-
-    if (targetCurrency.code === 'USD') {
-      totalInTarget = totalInUSD;
-    } else {
-      const targetRate = rateMap.get(targetCurrency.code);
-      if (!targetRate) {
-        throw new Error(`Rate not found for currency ${targetCurrency.code}`);
-      }
-
-      totalInTarget = totalInUSD.mul(targetRate);
-    }
-
-    const rounded = totalInTarget.toDecimalPlaces(
-      targetCurrency.decimal_digits,
-      Decimal.ROUND_HALF_UP,
+    const totalInTarget = this.moneyService.fromUSD(
+      totalInUSD,
+      targetCurrency,
+      rates,
     );
 
-    const balanceInMinorUnits = rounded
-      .mul(new Decimal(10).pow(targetCurrency.decimal_digits))
-      .toNumber();
+    if (!totalInTarget) {
+      throw new Error(`Rate not found for currency ${targetCurrency.code}`);
+    }
+
+    const { rounded, rawMinor } = this.moneyService.roundToScale(
+      totalInTarget,
+      targetCurrency.decimal_digits,
+    );
 
     return {
-      total_raw: balanceInMinorUnits,
+      total_raw: rawMinor,
       total: rounded.toNumber(),
       scale: targetCurrency.decimal_digits,
       currency: this.currencyService.toCurrencyDto(targetCurrency),
@@ -357,7 +364,12 @@ export class AccountService {
     const accounts = await this.findAll(userId);
     const rates = await this.rateService.getLatestValidRate();
 
-    const list = accounts.map((account) => this.toAccountDto(account));
+    const list = accounts.map((account) =>
+      this.toAccountDto(account, {
+        rates,
+        targetCurrency: settings.currency,
+      }),
+    );
     const summary = this.calculateAccountsSummary(
       accounts,
       rates,

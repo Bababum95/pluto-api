@@ -14,6 +14,7 @@ import {
 import { TransactionType } from './transaction.enum';
 import { CategoryService } from '../category/category.service';
 import { AccountService } from '../account/account.service';
+import { MoneyService } from '../money/money.service';
 import type {
   CreateTransactionDto,
   UpdateTransactionDto,
@@ -143,6 +144,7 @@ describe('TransactionService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionService,
+        MoneyService,
         {
           provide: getConnectionToken(),
           useValue: mockConnection,
@@ -190,12 +192,22 @@ describe('TransactionService', () => {
                 (acc: { _id: Types.ObjectId; name: string }) => ({
                   id: acc._id.toString(),
                   name: acc.name,
-                  balance: 1000.5,
-                  balance_raw: 100050,
-                  scale: 2,
+                  balance: {
+                    original: {
+                      value: 1000.5,
+                      raw: 100050,
+                      scale: 2,
+                      currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+                    },
+                    converted: {
+                      value: 1000.5,
+                      raw: 100050,
+                      scale: 2,
+                      currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+                    },
+                  },
                   color: '#FF5733',
                   icon: 'wallet',
-                  currency: { id: 'cur1', code: 'USD', symbol: '$' },
                   order: 0,
                   excluded: false,
                   createdAt: new Date().toISOString(),

@@ -54,14 +54,28 @@ describe('AccountController', () => {
     updatedAt: new Date(),
   };
 
+  const mockBalance = {
+    original: {
+      value: 1000.5,
+      raw: 100050,
+      scale: mockAccount.scale,
+      currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+    },
+    converted: {
+      value: 1000.5,
+      raw: 100050,
+      scale: mockAccount.scale,
+      currency: { code: 'USD', symbol: '$', decimal_digits: 2 },
+    },
+  };
   const mockAccountDto = {
     id: mockAccount._id,
     color: mockAccount.color,
     icon: mockAccount.icon,
     name: mockAccount.name,
-    balance: 1000.5, // Converted from minor units for API response
-    scale: mockAccount.scale,
-    currency: mockAccount.currency,
+    balance: mockBalance,
+    order: 0,
+    excluded: false,
     createdAt: mockAccount.createdAt.toISOString(),
     updatedAt: mockAccount.updatedAt.toISOString(),
   };

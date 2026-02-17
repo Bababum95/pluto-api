@@ -16,6 +16,7 @@ import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 
 import { CurrencyDto } from '../currency/currency.dto';
+import { MoneyViewDto } from '../money/money.dto';
 
 export class CreateAccountDto {
   @ApiProperty({
@@ -93,6 +94,20 @@ export class CreateAccountDto {
 
 export class UpdateAccountDto extends PartialType(CreateAccountDto) {}
 
+export class AccountBalanceViewDto {
+  @ApiProperty({
+    type: MoneyViewDto,
+    description: 'Balance in account currency',
+  })
+  original: MoneyViewDto;
+
+  @ApiProperty({
+    type: MoneyViewDto,
+    description: 'Balance in converted (e.g. base) currency',
+  })
+  converted: MoneyViewDto;
+}
+
 export class AccountDto {
   @ApiProperty()
   id: string;
@@ -106,17 +121,11 @@ export class AccountDto {
   @ApiProperty({ example: 'Main Wallet' })
   name: string;
 
-  @ApiProperty({ example: 1000.5 })
-  balance: number; // Converted from minor units for API response
-
-  @ApiProperty({ example: 100050 })
-  balance_raw: number;
-
-  @ApiProperty({ example: 2 })
-  scale: number;
-
-  @ApiProperty({ type: CurrencyDto })
-  currency: CurrencyDto;
+  @ApiProperty({
+    type: AccountBalanceViewDto,
+    description: 'Balance: original (account currency) and converted',
+  })
+  balance: AccountBalanceViewDto;
 
   @ApiProperty({ example: 1 })
   order: number;

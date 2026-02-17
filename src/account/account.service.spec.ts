@@ -13,6 +13,7 @@ import { Currency, CurrencyDocument } from '../currency/currency.schema';
 import { CurrencyService } from '../currency/currency.service';
 import { RateService } from '../rate/rate.service';
 import { SettingsService } from '../settings/settings.service';
+import { MoneyService } from '../money/money.service';
 import { AccountService } from './account.service';
 import type { CreateAccountDto, UpdateAccountDto } from './account.dto';
 
@@ -145,6 +146,7 @@ describe('AccountService', () => {
     module = await Test.createTestingModule({
       providers: [
         AccountService,
+        MoneyService,
         {
           provide: getModelToken(Account.name),
           useValue: MockModel,
@@ -549,15 +551,26 @@ describe('AccountService', () => {
       expect(mockCurrencyService.toCurrencyDto).toHaveBeenCalledWith(
         mockCurrency,
       );
+      const expectedBalance = {
+        original: {
+          value: 1000.5,
+          raw: 100050,
+          scale: mockAccount.scale,
+          currency: currencyDto,
+        },
+        converted: {
+          value: 1000.5,
+          raw: 100050,
+          scale: mockAccount.scale,
+          currency: currencyDto,
+        },
+      };
       expect(dto).toEqual({
         id: mockAccount._id.toString(),
         color: mockAccount.color,
         icon: mockAccount.icon,
         name: mockAccount.name,
-        balance: 1000.5, // Converted from 100050 minor units with scale 2
-        balance_raw: 100050,
-        scale: mockAccount.scale,
-        currency: currencyDto,
+        balance: expectedBalance,
         order: mockAccount.order,
         excluded: false,
         createdAt: mockAccount.createdAt.toISOString(),
