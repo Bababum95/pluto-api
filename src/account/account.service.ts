@@ -89,6 +89,7 @@ export class AccountService {
       color: createAccountDto.color,
       icon: createAccountDto.icon,
       name: createAccountDto.name.trim(),
+      description: createAccountDto.description?.trim(),
       currency: new Types.ObjectId(createAccountDto.currency),
       scale: createAccountDto.scale,
       user: new Types.ObjectId(userId),
@@ -196,6 +197,9 @@ export class AccountService {
     if (updateAccountDto.excluded !== undefined) {
       updateData.excluded = updateAccountDto.excluded;
     }
+    if (updateAccountDto.description !== undefined) {
+      updateData.description = updateAccountDto.description.trim() || undefined;
+    }
 
     const account = await this.accountModel
       .findOneAndUpdate(
@@ -290,6 +294,7 @@ export class AccountService {
       color: account.color,
       icon: account.icon,
       name: account.name,
+      description: account.description,
       balance,
       order: account.order,
       createdAt: account.createdAt.toISOString(),

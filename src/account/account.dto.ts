@@ -40,6 +40,17 @@ export class CreateAccountDto {
   name: string;
 
   @ApiProperty({
+    example: 'Personal spending account',
+    description: 'Optional account description',
+    maxLength: 500,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  @ApiProperty({
     example: 1000.5,
     description: 'Account balance (will be stored in minor units)',
     default: 0,
@@ -120,6 +131,13 @@ export class AccountDto {
 
   @ApiProperty({ example: 'Main Wallet' })
   name: string;
+
+  @ApiProperty({
+    example: 'Personal spending account',
+    description: 'Optional account description',
+    required: false,
+  })
+  description?: string;
 
   @ApiProperty({
     type: AccountBalanceViewDto,

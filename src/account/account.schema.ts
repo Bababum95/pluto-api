@@ -42,6 +42,13 @@ export class Account {
   name: string;
 
   @Prop({
+    required: false,
+    trim: true,
+    maxlength: 500,
+  })
+  description?: string;
+
+  @Prop({
     required: true,
     type: Number,
     default: 0,

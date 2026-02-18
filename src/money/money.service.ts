@@ -113,6 +113,7 @@ export class MoneyService {
       raw: rawMinor,
       scale,
       currency: {
+        id: targetCurrency._id.toString(),
         code: targetCurrency.code,
         symbol: targetCurrency.symbol,
         decimal_digits: targetCurrency.decimal_digits,

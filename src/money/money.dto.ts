@@ -2,6 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 
 /** Currency view for money display (code and symbol). */
 export class MoneyViewCurrencyDto {
+  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
+  id: string;
+
   @ApiProperty({ example: 'USD' })
   code: string;
 

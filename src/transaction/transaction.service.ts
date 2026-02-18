@@ -361,6 +361,7 @@ export class TransactionService {
       raw: transaction.amount,
       scale: transaction.scale,
       currency: {
+        id: account.balance.original.currency.id,
         code: account.balance.original.currency.code,
         symbol: account.balance.original.currency.symbol,
         decimal_digits: account.balance.original.currency.decimal_digits,
