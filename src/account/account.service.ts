@@ -47,20 +47,6 @@ export class AccountService {
     userId: string,
     createAccountDto: CreateAccountDto,
   ): Promise<AccountDocument> {
-    // Check if account with same name already exists for this user
-    const existing = await this.accountModel
-      .findOne({
-        user: new Types.ObjectId(userId),
-        name: createAccountDto.name.trim(),
-      })
-      .exec();
-
-    if (existing) {
-      throw new ConflictException(
-        this.i18n.t('account.errors.nameAlreadyExists'),
-      );
-    }
-
     // Validate currency exists
     const currency = await this.currencyModel
       .findById(createAccountDto.currency)

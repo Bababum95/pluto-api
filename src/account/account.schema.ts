@@ -91,5 +91,4 @@ export class Account {
 
 export const AccountSchema = SchemaFactory.createForClass(Account);
 
-// Compound index to ensure unique account names per user
-AccountSchema.index({ user: 1, name: 1 }, { unique: true });
+AccountSchema.index({ user: 1, name: 1 }, { unique: false });
