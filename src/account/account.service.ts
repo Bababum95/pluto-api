@@ -307,6 +307,8 @@ export class AccountService {
     let totalInUSD = new Decimal(0);
 
     for (const account of accounts) {
+      if (account.excluded) continue;
+
       const accountAmountDecimal = this.moneyService.fromMinorUnitsDecimal(
         account.balance,
         account.scale,
