@@ -4,7 +4,6 @@ import {
   Inject,
   forwardRef,
   NotFoundException,
-  ConflictException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -127,23 +126,6 @@ export class AccountService {
 
     if (!existingAccount) {
       throw new NotFoundException(this.i18n.t('account.errors.notFound'));
-    }
-
-    // If name is being updated, check for conflicts
-    if (updateAccountDto.name) {
-      const nameConflict = await this.accountModel
-        .findOne({
-          user: new Types.ObjectId(userId),
-          name: updateAccountDto.name.trim(),
-          _id: { $ne: id },
-        })
-        .exec();
-
-      if (nameConflict) {
-        throw new ConflictException(
-          this.i18n.t('account.errors.nameAlreadyExists'),
-        );
-      }
     }
 
     // Prepare update data
