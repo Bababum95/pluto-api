@@ -107,6 +107,7 @@ describe('MoneyService', () => {
     const amountDecimal = new Decimal(1500.5);
     const sourceCode = 'USD';
     const targetCurrency = {
+      _id: '507f1f77bcf86cd799439013',
       code: 'EUR',
       symbol: '€',
       decimal_digits: 2,
@@ -123,6 +124,7 @@ describe('MoneyService', () => {
     expect(result).not.toBeNull();
     expect(result?.scale).toBe(2);
     expect(result?.currency).toEqual({
+      id: '507f1f77bcf86cd799439013',
       code: 'EUR',
       symbol: '€',
       decimal_digits: 2,

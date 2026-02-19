@@ -1,6 +1,5 @@
 import {
   NotFoundException,
-  ConflictException,
   BadRequestException,
 } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
@@ -211,16 +210,14 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
-      // Mock findOne for checking existing account and finding max order
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(null)) // No existing account with same name
-        .mockReturnValueOnce(createChain(null)); // No existing accounts (for order calculation)
+      // Mock findOne for finding max order
+      mockAccountModel.findOne.mockReturnValue(createChain(null));
       mockAccountModel.findById.mockReturnValue(createChain(mockAccount));
 
       const result = await service.create(userId, createDto);
 
       expect(mockCurrencyModel.findById).toHaveBeenCalledWith(currencyId);
-      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(2);
+      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(1);
       expect(saveMock).toHaveBeenCalled();
       expect(mockAccountModel.findById).toHaveBeenCalledWith(accountId);
       expect(result).toEqual(mockAccount);
@@ -238,10 +235,7 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
-      // Mock findOne for checking existing account and finding max order
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(null)) // No existing account with same name
-        .mockReturnValueOnce(createChain(null)); // No existing accounts (for order calculation)
+      mockAccountModel.findOne.mockReturnValue(createChain(null));
       const accountWithDefaultBalance = {
         ...mockAccount,
         balance: 0, // 0 in minor units
@@ -254,33 +248,9 @@ describe('AccountService', () => {
 
       const result = await service.create(userId, createDto);
 
-      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(2);
+      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(1);
       expect(saveMock).toHaveBeenCalled();
       expect(result).toEqual(accountWithDefaultBalance);
-    });
-
-    it('should throw ConflictException when account name already exists', async () => {
-      const currencyId = mockCurrency._id.toString();
-      const createDto: CreateAccountDto = {
-        color: '#FF5733',
-        icon: 'wallet',
-        name: 'Main Wallet',
-        balance: 1000.5,
-        scale: 2,
-        currency: currencyId,
-      };
-      mockCurrencyModel.findById.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(mockCurrency),
-      });
-      // Mock findOne: finds existing account with same name
-      mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
-
-      await expect(service.create(userId, createDto)).rejects.toThrow(
-        ConflictException,
-      );
-      await expect(service.create(userId, createDto)).rejects.toThrow(
-        'Account with this name already exists',
-      );
     });
 
     it('should throw BadRequestException when currency not found', async () => {
@@ -296,8 +266,6 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(null),
       });
-      // Mock findOne for checking existing account (will fail before order check)
-      mockAccountModel.findOne.mockReturnValueOnce(createChain(null));
 
       await expect(service.create(userId, createDto)).rejects.toThrow(
         BadRequestException,
@@ -321,11 +289,7 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
-      // First call: check name conflict (none)
-      // Second call: find max order (returns account with order 2)
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(null))
-        .mockReturnValueOnce(createChain(existingAccount));
+      mockAccountModel.findOne.mockReturnValue(createChain(existingAccount));
       const newAccount = { ...mockAccount, name: 'Second Wallet', order: 3 };
       mockAccountModel.findById.mockReturnValue(createChain(newAccount));
 
@@ -348,9 +312,7 @@ describe('AccountService', () => {
       mockCurrencyModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(mockCurrency),
       });
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(null)) // No name conflict
-        .mockReturnValueOnce(createChain(null)); // Order check (not used when order provided)
+      mockAccountModel.findOne.mockReturnValue(createChain(null));
       const newAccount = {
         ...mockAccount,
         name: 'Custom Order Wallet',
@@ -404,11 +366,7 @@ describe('AccountService', () => {
     it('should update an account and return it', async () => {
       const updateDto: UpdateAccountDto = { name: 'Updated Name' };
       const updated = { ...mockAccount, name: 'Updated Name' };
-      // First call: find existing account
-      // Second call: check for name conflict (should return null - no conflict)
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(mockAccount))
-        .mockReturnValueOnce(createChain(null));
+      mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
       mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
 
       const result = await service.update(
@@ -417,7 +375,7 @@ describe('AccountService', () => {
         updateDto,
       );
 
-      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(2);
+      expect(mockAccountModel.findOne).toHaveBeenCalledTimes(1);
       expect(mockAccountModel.findOneAndUpdate).toHaveBeenCalledWith(
         {
           _id: accountId.toString(),
@@ -481,19 +439,6 @@ describe('AccountService', () => {
       await expect(
         service.update(userId, 'invalid', { name: 'Updated' }),
       ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw ConflictException when new name already exists', async () => {
-      const updateDto: UpdateAccountDto = { name: 'Existing Name' };
-      mockAccountModel.findOne
-        .mockReturnValueOnce(createChain(mockAccount)) // First call for existing account check
-        .mockReturnValueOnce(
-          createChain({ _id: 'other-id', name: 'Existing Name' }),
-        ); // Second call for name conflict check
-
-      await expect(
-        service.update(userId, accountId.toString(), updateDto),
-      ).rejects.toThrow(ConflictException);
     });
 
     it('should throw BadRequestException when currency not found during update', async () => {
