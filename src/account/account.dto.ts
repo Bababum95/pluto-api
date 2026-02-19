@@ -10,6 +10,8 @@ import {
   MaxLength,
   IsMongoId,
   IsBoolean,
+  IsArray,
+  ArrayMinSize,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
@@ -104,6 +106,18 @@ export class CreateAccountDto {
 }
 
 export class UpdateAccountDto extends PartialType(CreateAccountDto) {}
+
+export class ReorderAccountsDto {
+  @ApiProperty({
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    description: 'Account IDs in the desired order (index = display order)',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsMongoId({ each: true })
+  ids: string[];
+}
 
 export class AccountBalanceViewDto {
   @ApiProperty({

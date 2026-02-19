@@ -1,0 +1,12 @@
+{
+  "errors": {
+    "notFound": "Account not found",
+    "currencyNotFound": "Currency not found"
+  },
+  "create": {
+    "failed": "Account creation failed"
+  },
+  "reorder": {
+    "success": "Accounts have been reordered"
+  }
+}

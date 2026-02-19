@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { I18n, I18nContext } from 'nestjs-i18n';
 
 import { AccountService } from './account.service';
 import {
@@ -25,6 +26,7 @@ import {
   AccountSummaryDto,
   AccountListResponseDto,
   AccountWithSummaryResponseDto,
+  ReorderAccountsDto,
 } from './account.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -124,6 +126,35 @@ export class AccountController {
       throw new NotFoundException('Account not found');
     }
     return this.accountService.toAccountDto(account);
+  }
+
+  @Patch('reorder')
+  @ApiOperation({
+    summary:
+      'Reorder accounts by providing list of account IDs (index = order)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Accounts have been reordered.',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'number', example: 200 },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'One or more accounts not found.' })
+  async reorder(
+    @UserDecorator() user: RequestUser,
+    @Body() body: ReorderAccountsDto,
+    @I18n() i18n: I18nContext,
+  ): Promise<{ status: number; message: string }> {
+    await this.accountService.reorder(user.userId, body.ids);
+    return {
+      status: HttpStatus.OK,
+      message: i18n.t('account.reorder.success'),
+    };
   }
 
   @Patch('excluded/:id')

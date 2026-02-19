@@ -1,7 +1,4 @@
-import {
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
@@ -84,6 +81,7 @@ describe('AccountService', () => {
     findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     findOneAndDelete: jest.Mock;
+    bulkWrite: jest.Mock;
   };
   let mockCurrencyModel: {
     findById: jest.Mock;
@@ -126,6 +124,7 @@ describe('AccountService', () => {
       findById: jest.Mock;
       findOneAndUpdate: jest.Mock;
       findOneAndDelete: jest.Mock;
+      bulkWrite: jest.Mock;
     };
 
     const chainNull = createChain(null);
@@ -135,6 +134,7 @@ describe('AccountService', () => {
     MockModel.findById = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndUpdate = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndDelete = jest.fn().mockReturnValue(chainNull);
+    MockModel.bulkWrite = jest.fn().mockResolvedValue({ ok: 1 });
 
     const MockCurrencyModel = {
       findById: jest.fn().mockReturnValue({
@@ -190,6 +190,7 @@ describe('AccountService', () => {
     MockModel.findById.mockReturnValue(createChain(null));
     MockModel.findOneAndUpdate.mockReturnValue(createChain(null));
     MockModel.findOneAndDelete.mockReturnValue(createChain(null));
+    MockModel.bulkWrite.mockResolvedValue({ ok: 1 });
   });
 
   it('should be defined', () => {
@@ -455,6 +456,61 @@ describe('AccountService', () => {
       await expect(
         service.update(userId, accountId.toString(), updateDto),
       ).rejects.toThrow('Currency not found');
+    });
+  });
+
+  describe('reorder', () => {
+    const accountId2 = new Types.ObjectId('507f1f77bcf86cd799439013');
+    const accountId3 = new Types.ObjectId('507f1f77bcf86cd799439014');
+
+    it('should update order for each account by index and return void', async () => {
+      const ids = [accountId.toString(), accountId2.toString()];
+      const foundAccounts = [{ _id: accountId }, { _id: accountId2 }];
+      const findChain = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(foundAccounts),
+      };
+      mockAccountModel.find.mockReturnValue(findChain);
+      mockAccountModel.bulkWrite.mockResolvedValue({ ok: 1 });
+
+      await service.reorder(userId, ids);
+
+      expect(mockAccountModel.find).toHaveBeenCalledWith({
+        _id: { $in: [accountId, accountId2] },
+        user: new Types.ObjectId(userId),
+      });
+      expect(findChain.select).toHaveBeenCalledWith('_id');
+      expect(mockAccountModel.bulkWrite).toHaveBeenCalledWith([
+        {
+          updateOne: {
+            filter: { _id: accountId, user: new Types.ObjectId(userId) },
+            update: { $set: { order: 0 } },
+          },
+        },
+        {
+          updateOne: {
+            filter: { _id: accountId2, user: new Types.ObjectId(userId) },
+            update: { $set: { order: 1 } },
+          },
+        },
+      ]);
+    });
+
+    it('should throw NotFoundException when not all account ids belong to user', async () => {
+      const ids = [accountId.toString(), accountId3.toString()];
+      const foundAccounts = [{ _id: accountId }];
+      const findChain = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(foundAccounts),
+      };
+      mockAccountModel.find.mockReturnValue(findChain);
+
+      await expect(service.reorder(userId, ids)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockAccountModel.bulkWrite).not.toHaveBeenCalled();
     });
   });
 

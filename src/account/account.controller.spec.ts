@@ -30,10 +30,16 @@ describe('AccountController', () => {
     findAllWithSummary: jest.Mock;
     findOne: jest.Mock;
     update: jest.Mock;
+    reorder: jest.Mock;
     toggleExcluded: jest.Mock;
     remove: jest.Mock;
     getSummary: jest.Mock;
     toAccountDto: jest.Mock;
+  };
+
+  const mockI18n = {
+    t: (key: string): string =>
+      key === 'account.reorder.success' ? 'Accounts have been reordered' : key,
   };
 
   const mockUser: RequestUser = {
@@ -95,6 +101,7 @@ describe('AccountController', () => {
       findAllWithSummary: jest.fn(),
       findOne: jest.fn(),
       update: jest.fn(),
+      reorder: jest.fn(),
       toggleExcluded: jest.fn(),
       remove: jest.fn(),
       getSummary: jest.fn(),
@@ -234,6 +241,37 @@ describe('AccountController', () => {
         account: updatedDto,
         summary: mockSummary,
       });
+    });
+  });
+
+  describe('reorder', () => {
+    it('should reorder accounts and return status and message', async () => {
+      const ids = [mockAccount._id, '507f1f77bcf86cd799439013'];
+      const body = { ids };
+      service.reorder.mockResolvedValue(undefined);
+
+      const result = await controller.reorder(
+        mockUser,
+        body,
+        mockI18n as never,
+      );
+
+      expect(service.reorder).toHaveBeenCalledWith(mockUser.userId, ids);
+      expect(result).toEqual({
+        status: 200,
+        message: 'Accounts have been reordered',
+      });
+    });
+
+    it('should throw NotFoundException when one or more accounts not found', async () => {
+      const body = { ids: [mockAccount._id, '507f1f77bcf86cd799439099'] };
+      service.reorder.mockRejectedValue(
+        new NotFoundException('Account not found'),
+      );
+
+      await expect(
+        controller.reorder(mockUser, body, mockI18n as never),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

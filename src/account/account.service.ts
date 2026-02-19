@@ -185,6 +185,30 @@ export class AccountService {
     return account;
   }
 
+  async reorder(userId: string, accountIds: string[]): Promise<void> {
+    const userObjectId = new Types.ObjectId(userId);
+    const ids = accountIds.map((id) => new Types.ObjectId(id));
+
+    const accounts = await this.accountModel
+      .find({ _id: { $in: ids }, user: userObjectId })
+      .select('_id')
+      .lean()
+      .exec();
+
+    if (accounts.length !== ids.length) {
+      throw new NotFoundException(this.i18n.t('account.errors.notFound'));
+    }
+
+    const bulkOps = accountIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new Types.ObjectId(id), user: userObjectId },
+        update: { $set: { order: index } },
+      },
+    }));
+
+    await this.accountModel.bulkWrite(bulkOps);
+  }
+
   async toggleExcluded(userId: string, id: string): Promise<AccountDocument> {
     const account = await this.accountModel
       .findOne({
