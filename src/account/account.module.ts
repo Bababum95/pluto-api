@@ -6,6 +6,7 @@ import { CurrencyModule } from '../currency/currency.module';
 import { RateModule } from '../rate/rate.module';
 import { SettingsModule } from '../settings/settings.module';
 import { MoneyModule } from '../money/money.module';
+import { TransactionModule } from '../transaction/transaction.module';
 
 import { Account, AccountSchema } from './account.schema';
 import { AccountController } from './account.controller';
@@ -13,6 +14,7 @@ import { AccountService } from './account.service';
 
 @Module({
   imports: [
+    forwardRef(() => TransactionModule),
     MongooseModule.forFeature([
       { name: Account.name, schema: AccountSchema },
       { name: Currency.name, schema: CurrencySchema },

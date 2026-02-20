@@ -198,6 +198,10 @@ export class AccountController {
       },
     },
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Currency cannot be changed when account has transactions.',
+  })
   @ApiResponse({ status: 404, description: 'Account not found.' })
   @ApiResponse({ status: 409, description: 'Account name already exists.' })
   async update(

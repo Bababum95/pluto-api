@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { Model, Types } from 'mongoose';
 
+import { Transaction } from '../transaction/transaction.schema';
 import { Account, AccountDocument } from './account.schema';
 import { Currency, CurrencyDocument } from '../currency/currency.schema';
 import { CurrencyService } from '../currency/currency.service';
@@ -22,6 +23,8 @@ const mockI18nService = {
       'account.errors.notFound': 'Account not found',
       'account.errors.currencyNotFound': 'Currency not found',
       'account.errors.currencyNotPopulated': 'Currency must be populated',
+      'account.errors.currencyChangeForbiddenWithTransactions':
+        'Cannot change currency: account has at least one transaction.',
     };
     return options?.defaultValue ?? messages[key] ?? key;
   },
@@ -86,6 +89,9 @@ describe('AccountService', () => {
   let mockCurrencyModel: {
     findById: jest.Mock;
   };
+  let mockTransactionModel: {
+    exists: jest.Mock;
+  };
   let saveMock: jest.Mock;
 
   const userId = '507f1f77bcf86cd799439011';
@@ -142,6 +148,12 @@ describe('AccountService', () => {
       }),
     };
 
+    const transactionModelValue = {
+      exists: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      }),
+    };
+
     module = await Test.createTestingModule({
       providers: [
         AccountService,
@@ -153,6 +165,10 @@ describe('AccountService', () => {
         {
           provide: getModelToken(Currency.name),
           useValue: MockCurrencyModel,
+        },
+        {
+          provide: getModelToken(Transaction.name),
+          useValue: transactionModelValue,
         },
         {
           provide: CurrencyService,
@@ -176,6 +192,7 @@ describe('AccountService', () => {
     service = module.get<AccountService>(AccountService);
     mockAccountModel = module.get(getModelToken(Account.name));
     mockCurrencyModel = module.get(getModelToken(Currency.name));
+    mockTransactionModel = module.get(getModelToken(Transaction.name));
     jest.clearAllMocks();
 
     // Restore chainable return values after clearAllMocks
@@ -191,6 +208,9 @@ describe('AccountService', () => {
     MockModel.findOneAndUpdate.mockReturnValue(createChain(null));
     MockModel.findOneAndDelete.mockReturnValue(createChain(null));
     MockModel.bulkWrite.mockResolvedValue({ ok: 1 });
+    mockTransactionModel.exists.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(null),
+    });
   });
 
   it('should be defined', () => {
@@ -456,6 +476,30 @@ describe('AccountService', () => {
       await expect(
         service.update(userId, accountId.toString(), updateDto),
       ).rejects.toThrow('Currency not found');
+    });
+
+    it('should throw BadRequestException when changing currency and account has transactions', async () => {
+      const otherCurrencyId = '507f1f77bcf86cd799439099';
+      const updateDto: UpdateAccountDto = { currency: otherCurrencyId };
+      const existingAccountWithCurrencyId = {
+        ...mockAccount,
+        currency: mockCurrency._id,
+      };
+      mockAccountModel.findOne.mockReturnValue(
+        createChain(existingAccountWithCurrencyId),
+      );
+      mockTransactionModel.exists.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: new Types.ObjectId() }),
+      });
+
+      const promise = service.update(userId, accountId.toString(), updateDto);
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow(
+        'Cannot change currency: account has at least one transaction.',
+      );
+      expect(mockTransactionModel.exists).toHaveBeenCalledWith({
+        account: accountId,
+      });
     });
   });
 

@@ -16,6 +16,10 @@ import { RateService } from '../rate/rate.service';
 import { SettingsService } from '../settings/settings.service';
 import { Rate } from '../rate/rate.schema';
 import { MoneyService } from '../money/money.service';
+import {
+  Transaction,
+  TransactionDocument,
+} from '../transaction/transaction.schema';
 
 import { Account, AccountDocument } from './account.schema';
 import {
@@ -34,6 +38,8 @@ export class AccountService {
     private readonly accountModel: Model<AccountDocument>,
     @InjectModel(Currency.name)
     private readonly currencyModel: Model<CurrencyDocument>,
+    @InjectModel(Transaction.name)
+    private readonly transactionModel: Model<TransactionDocument>,
     private readonly currencyService: CurrencyService,
     private readonly rateService: RateService,
     @Inject(forwardRef(() => SettingsService))
@@ -141,6 +147,31 @@ export class AccountService {
       updateData.icon = updateAccountDto.icon;
     }
     if (updateAccountDto.currency !== undefined) {
+      const newCurrencyId =
+        typeof updateAccountDto.currency === 'string'
+          ? updateAccountDto.currency
+          : String(updateAccountDto.currency);
+      const currentCurrencyId = (
+        existingAccount.currency as Types.ObjectId
+      ).toString();
+
+      if (newCurrencyId !== currentCurrencyId) {
+        const hasTransactions = await this.transactionModel
+          .exists({ account: existingAccount._id })
+          .exec();
+
+        if (hasTransactions) {
+          const message = this.i18n.t(
+            'account.errors.currencyChangeForbiddenWithTransactions',
+            {
+              defaultValue:
+                'Cannot change currency: account has at least one transaction.',
+            },
+          );
+          throw new BadRequestException(message);
+        }
+      }
+
       // Validate currency exists
       const currency = await this.currencyModel
         .findById(updateAccountDto.currency)
