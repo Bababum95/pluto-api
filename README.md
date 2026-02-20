@@ -1,8 +1,7 @@
 # Pluto API
 
-[![CI](https://github.com/bababum95/pluto/actions/workflows/ci.yml/badge.svg)](https://github.com/bababum95/pluto/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/bababum95/pluto/branch/main/graph/badge.svg)](https://codecov.io/gh/bababum95/pluto)
-![Coverage](https://img.shields.io/codecov/c/github/bababum95/pluto?label=coverage&logo=codecov)
+[![CI](https://github.com/Bababum95/pluto-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Bababum95/pluto-api/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/github/Bababum95/pluto-api/graph/badge.svg?token=7WJ5PVP04F)](https://codecov.io/github/Bababum95/pluto-api)
 
 NestJS backend API for Pluto: authentication, users, accounts, transactions, currencies and exchange rates.
 
