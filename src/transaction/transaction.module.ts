@@ -22,7 +22,7 @@ import { TransactionService } from './transaction.service';
     ]),
     forwardRef(() => AccountModule),
     CategoryModule,
-    SettingsModule,
+    forwardRef(() => SettingsModule),
     RateModule,
     MoneyModule,
   ],

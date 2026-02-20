@@ -99,7 +99,6 @@ When running in dev, Swagger UI is available at (if enabled in the app):
 - GitHub Actions (`.github/workflows/ci.yml`) runs tests and collects coverage.
 - Reports are uploaded to [Codecov](https://codecov.io) when `CODECOV_TOKEN` is set in repository secrets.
 
-If your repository is different (not `bababum95/pluto`), update the badge URLs at the top of this README with your owner and repo name.
 
 ## License
 
