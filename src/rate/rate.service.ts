@@ -132,18 +132,21 @@ export class RateService {
     await this.updateManyRates(rates);
   }
 
+  async ensureFreshRates(): Promise<void> {
+    const latest = await this.getLatestUpdatedRate();
+
+    const isValid =
+      latest &&
+      Date.now() - new Date(latest.updatedAt).getTime() < RATES_TTL_MS;
+
+    if (!isValid) await this.fetchAndUpdateRates();
+  }
+
   /**
    * Get latest valid rate, update if expired
    */
   async getLatestValidRate(): Promise<Rate[]> {
-    const last = await this.getLatestUpdatedRate();
-
-    const isValid =
-      last && Date.now() - new Date(last.updatedAt).getTime() < RATES_TTL_MS;
-
-    if (isValid) return this.findAll();
-
-    await this.fetchAndUpdateRates();
+    await this.ensureFreshRates();
 
     return this.findAll();
   }
