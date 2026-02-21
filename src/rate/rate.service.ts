@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
@@ -8,7 +9,7 @@ import type { CurrencyApiClient } from '../currency/currency.types';
 import { Rate, RateDocument } from './rate.schema';
 import { CreateRateDto, UpdateRateDto } from './rate.dto';
 import { RateType } from './rate.types';
-import { RATES_TTL_MS } from './rate.constants';
+import { RATES_TTL_MS_DEFAULT } from './rate.constants';
 
 @Injectable()
 export class RateService {
@@ -18,7 +19,14 @@ export class RateService {
 
     @Inject(CURRENCY_API_CLIENT)
     private readonly currencyClient: CurrencyApiClient,
+
+    private readonly configService: ConfigService,
   ) {}
+
+  private get ratesTtlMs(): number {
+    const raw = this.configService.get<string>('RATES_TTL_MS');
+    return raw ? parseInt(raw, 10) : RATES_TTL_MS_DEFAULT;
+  }
 
   async create(createRateDto: CreateRateDto): Promise<Rate> {
     const createdRate = new this.rateModel(createRateDto);
@@ -38,7 +46,7 @@ export class RateService {
     const updatedAt = rate.updatedAt;
     if (
       updatedAt &&
-      Date.now() - new Date(updatedAt).getTime() > RATES_TTL_MS
+      Date.now() - new Date(updatedAt).getTime() > this.ratesTtlMs
     ) {
       await this.fetchAndUpdateRates();
       return this.findOne(id);
@@ -56,7 +64,7 @@ export class RateService {
     const updatedAt = rate.updatedAt;
     if (
       updatedAt &&
-      Date.now() - new Date(updatedAt).getTime() > RATES_TTL_MS
+      Date.now() - new Date(updatedAt).getTime() > this.ratesTtlMs
     ) {
       await this.fetchAndUpdateRates();
       return this.findByCode(code);
@@ -137,7 +145,7 @@ export class RateService {
 
     const isValid =
       latest &&
-      Date.now() - new Date(latest.updatedAt).getTime() < RATES_TTL_MS;
+      Date.now() - new Date(latest.updatedAt).getTime() < this.ratesTtlMs;
 
     if (!isValid) await this.fetchAndUpdateRates();
   }
