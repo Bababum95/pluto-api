@@ -1,0 +1,165 @@
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { I18nService } from 'nestjs-i18n';
+
+import { Tag, TagDocument } from './tag.schema';
+import { CreateTagDto, UpdateTagDto, TagDto } from './tag.dto';
+
+@Injectable()
+export class TagService {
+  constructor(
+    @InjectModel(Tag.name)
+    private readonly tagModel: Model<TagDocument>,
+    private readonly i18n: I18nService,
+  ) {}
+
+  async create(
+    userId: string,
+    createTagDto: CreateTagDto,
+  ): Promise<TagDocument> {
+    const existing = await this.tagModel
+      .findOne({
+        user: new Types.ObjectId(userId),
+        name: createTagDto.name.trim(),
+      })
+      .exec();
+
+    if (existing) {
+      throw new ConflictException(
+        this.i18n.t('tag.errors.nameAlreadyExists', {
+          defaultValue: 'Tag with this name already exists',
+        }),
+      );
+    }
+
+    const tag = new this.tagModel({
+      ...createTagDto,
+      user: new Types.ObjectId(userId),
+      name: createTagDto.name.trim(),
+      color: createTagDto.color?.trim() ?? '#6B7280',
+      icon: createTagDto.icon?.trim() ?? 'tag',
+    });
+
+    await tag.save();
+    const created = await this.tagModel.findById(tag._id).exec();
+    if (!created) {
+      throw new Error(
+        this.i18n.t('tag.create.failed', {
+          defaultValue: 'Tag creation failed',
+        }),
+      );
+    }
+    return created;
+  }
+
+  async findAll(userId: string): Promise<TagDocument[]> {
+    return this.tagModel
+      .find({ user: new Types.ObjectId(userId) })
+      .sort({ name: 1 })
+      .exec();
+  }
+
+  async findOne(userId: string, id: string): Promise<TagDocument | null> {
+    return this.tagModel
+      .findOne({
+        _id: id,
+        user: new Types.ObjectId(userId),
+      })
+      .exec();
+  }
+
+  async findByIds(userId: string, ids: string[]): Promise<TagDocument[]> {
+    if (!ids.length) return [];
+    const objectIds = ids
+      .filter((id) => id && Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (!objectIds.length) return [];
+    return this.tagModel
+      .find({
+        _id: { $in: objectIds },
+        user: new Types.ObjectId(userId),
+      })
+      .exec();
+  }
+
+  async update(
+    userId: string,
+    id: string,
+    updateTagDto: UpdateTagDto,
+  ): Promise<TagDocument> {
+    if (updateTagDto.name) {
+      const existing = await this.tagModel
+        .findOne({
+          user: new Types.ObjectId(userId),
+          name: updateTagDto.name.trim(),
+          _id: { $ne: id },
+        })
+        .exec();
+
+      if (existing) {
+        throw new ConflictException(
+          this.i18n.t('tag.errors.nameAlreadyExists', {
+            defaultValue: 'Tag with this name already exists',
+          }),
+        );
+      }
+    }
+
+    const updateData = updateTagDto.name
+      ? { ...updateTagDto, name: updateTagDto.name.trim() }
+      : updateTagDto;
+
+    const tag = await this.tagModel
+      .findOneAndUpdate(
+        { _id: id, user: new Types.ObjectId(userId) },
+        updateData,
+        { new: true },
+      )
+      .exec();
+
+    if (!tag) {
+      throw new NotFoundException(
+        this.i18n.t('tag.errors.notFound', {
+          defaultValue: 'Tag not found',
+        }),
+      );
+    }
+
+    return tag;
+  }
+
+  async remove(userId: string, id: string): Promise<boolean> {
+    const result = await this.tagModel
+      .findOneAndDelete({
+        _id: id,
+        user: new Types.ObjectId(userId),
+      })
+      .exec();
+
+    if (!result) {
+      throw new NotFoundException(
+        this.i18n.t('tag.errors.notFound', {
+          defaultValue: 'Tag not found',
+        }),
+      );
+    }
+
+    return true;
+  }
+
+  toTagDto(tag: TagDocument): TagDto {
+    return {
+      id: tag._id.toString(),
+      name: tag.name,
+      color: tag.color,
+      icon: tag.icon,
+      createdAt: tag.createdAt.toISOString(),
+      updatedAt: tag.updatedAt.toISOString(),
+    };
+  }
+}

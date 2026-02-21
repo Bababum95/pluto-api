@@ -10,7 +10,6 @@ import {
   MaxLength,
   IsOptional,
   IsArray,
-  MinLength,
   IsDateString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -19,6 +18,7 @@ import { Type } from 'class-transformer';
 
 import { AccountDto, AccountSummaryDto } from '../account/account.dto';
 import { CategoryDto } from '../category/category.dto';
+import { TagDto } from '../tag/tag.dto';
 import { MoneyViewDto } from '../money/money.dto';
 
 import { TransactionType } from './transaction.enum';
@@ -126,14 +126,14 @@ export class CreateTransactionDto {
   scale: number;
 
   @ApiProperty({
-    example: ['food', 'restaurant'],
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
     type: [String],
+    description: 'Tag IDs',
     required: false,
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  @MinLength(1, { each: true })
+  @IsMongoId({ each: true })
   tags?: string[];
 }
 
@@ -158,8 +158,11 @@ export class TransactionDto {
   })
   amount: TransactionAmountViewDto;
 
-  @ApiProperty({ example: ['food', 'restaurant'] })
-  tags: string[];
+  @ApiProperty({
+    type: [TagDto],
+    description: 'Tag entities attached to the transaction',
+  })
+  tags: TagDto[];
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;

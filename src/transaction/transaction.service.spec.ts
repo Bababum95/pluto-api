@@ -7,6 +7,7 @@ import { Types } from 'mongoose';
 import { Transaction, TransactionDocument } from './transaction.schema';
 import { Category } from '../category/category.schema';
 import { Account } from '../account/account.schema';
+import { Tag } from '../tag/tag.schema';
 import {
   TransactionService,
   type TransactionDocumentPopulated,
@@ -14,6 +15,7 @@ import {
 import { TransactionType } from './transaction.enum';
 import { CategoryService } from '../category/category.service';
 import { AccountService } from '../account/account.service';
+import { TagService } from '../tag/tag.service';
 import { MoneyService } from '../money/money.service';
 import type {
   CreateTransactionDto,
@@ -25,6 +27,7 @@ const mockI18nService = {
     const messages: Record<string, string> = {
       'transaction.errors.categoryNotFound': 'Category not found',
       'transaction.errors.accountNotFound': 'Account not found',
+      'transaction.errors.tagNotFound': 'One or more tags not found',
       'transaction.create.failed': 'Transaction creation failed',
       'transaction.errors.notFound': 'Transaction not found',
     };
@@ -51,12 +54,14 @@ describe('TransactionService', () => {
   };
   let mockCategoryModel: { findOne: jest.Mock };
   let mockAccountModel: { findOne: jest.Mock; updateOne: jest.Mock };
+  let mockTagModel: { find: jest.Mock };
   let saveMock: jest.Mock;
 
   const userId = '507f1f77bcf86cd799439011';
   const transactionId = new Types.ObjectId('507f1f77bcf86cd799439013');
   const categoryId = new Types.ObjectId('507f1f77bcf86cd799439012');
   const accountId = new Types.ObjectId('507f1f77bcf86cd799439014');
+  const tagId = new Types.ObjectId('507f1f77bcf86cd799439015');
 
   const mockCategoryDoc = {
     _id: categoryId,
@@ -82,6 +87,15 @@ describe('TransactionService', () => {
     updatedAt: new Date(),
   };
 
+  const mockTagDoc = {
+    _id: tagId,
+    name: 'food',
+    color: '#6B7280',
+    icon: 'tag',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   const mockTransaction = {
     _id: transactionId,
     user: new Types.ObjectId(userId),
@@ -91,7 +105,7 @@ describe('TransactionService', () => {
     account: accountId,
     amount: -150050,
     scale: 2,
-    tags: ['food'],
+    tags: [tagId],
     createdAt: new Date(),
     updatedAt: new Date(),
   } as unknown as TransactionDocument;
@@ -100,6 +114,7 @@ describe('TransactionService', () => {
     ...mockTransaction,
     category: mockCategoryDoc,
     account: mockAccountDoc,
+    tags: [mockTagDoc],
   } as unknown as TransactionDocumentPopulated;
 
   beforeEach(async () => {
@@ -132,6 +147,13 @@ describe('TransactionService', () => {
       findOne: jest.fn().mockReturnValue(createChain({ _id: accountId })),
       updateOne: jest.fn().mockReturnValue(createChain({ modifiedCount: 1 })),
     };
+    mockTagModel = {
+      find: jest
+        .fn()
+        .mockReturnValue(
+          createChain([{ _id: tagId, user: new Types.ObjectId(userId) }]),
+        ),
+    };
 
     const mockSession = {
       withTransaction: jest.fn((cb: () => Promise<unknown>) => cb()),
@@ -162,6 +184,10 @@ describe('TransactionService', () => {
           useValue: mockAccountModel,
         },
         {
+          provide: getModelToken(Tag.name),
+          useValue: mockTagModel,
+        },
+        {
           provide: I18nService,
           useValue: mockI18nService,
         },
@@ -177,6 +203,23 @@ describe('TransactionService', () => {
                   color: '#FF5733',
                   icon: 'wallet',
                   type: 'expense',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }),
+              ),
+          },
+        },
+        {
+          provide: TagService,
+          useValue: {
+            toTagDto: jest
+              .fn()
+              .mockImplementation(
+                (t: { _id: Types.ObjectId; name: string }) => ({
+                  id: t._id.toString(),
+                  name: t.name,
+                  color: '#6B7280',
+                  icon: 'tag',
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 }),
@@ -250,7 +293,7 @@ describe('TransactionService', () => {
         account: accountId.toString(),
         amount: -1500.5,
         scale: 2,
-        tags: ['food'],
+        tags: [tagId.toString()],
       };
 
       const result = await service.create(userId, createDto);
@@ -432,7 +475,13 @@ describe('TransactionService', () => {
         expect.objectContaining({ code: 'USD', symbol: '$' }),
       );
       expect(dto.amount.converted).toEqual(dto.amount.original);
-      expect(dto.tags).toEqual(mockTransaction.tags);
+      expect(dto.tags).toHaveLength(1);
+      expect(dto.tags[0]).toEqual(
+        expect.objectContaining({
+          id: tagId.toString(),
+          name: 'food',
+        }),
+      );
       expect(dto.createdAt).toBe(mockTransaction.createdAt.toISOString());
       expect(dto.updatedAt).toBe(mockTransaction.updatedAt.toISOString());
     });

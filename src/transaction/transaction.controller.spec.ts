@@ -26,7 +26,7 @@ type MockedTransaction = {
   account: string;
   amount: number;
   scale: number;
-  tags: string[];
+  tags: { id: string; name: string }[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -70,7 +70,7 @@ describe('TransactionController', () => {
     account: '507f1f77bcf86cd799439014',
     amount: -150050,
     scale: 2,
-    tags: ['food'],
+    tags: [{ id: '507f1f77bcf86cd799439015', name: 'food' }],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -120,7 +120,16 @@ describe('TransactionController', () => {
       original: moneyView(-1500.5, mockTransaction.amount, 2),
       converted: moneyView(-1500.5, mockTransaction.amount, 2),
     },
-    tags: mockTransaction.tags,
+    tags: [
+      {
+        id: '507f1f77bcf86cd799439015',
+        name: 'food',
+        color: '#6B7280',
+        icon: 'tag',
+        createdAt: mockTransaction.createdAt.toISOString(),
+        updatedAt: mockTransaction.updatedAt.toISOString(),
+      },
+    ],
     createdAt: mockTransaction.createdAt.toISOString(),
     updatedAt: mockTransaction.updatedAt.toISOString(),
   };
@@ -139,7 +148,7 @@ describe('TransactionController', () => {
     account: '507f1f77bcf86cd799439014',
     amount: -1500.5,
     scale: 2,
-    tags: ['food'],
+    tags: ['507f1f77bcf86cd799439015'],
   };
 
   beforeEach(async () => {

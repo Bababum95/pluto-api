@@ -10,9 +10,11 @@ import { I18nService } from 'nestjs-i18n';
 
 import { Category, CategoryDocument } from '../category/category.schema';
 import { Account, AccountDocument } from '../account/account.schema';
+import { Tag, TagDocument } from '../tag/tag.schema';
 import { TransactionType } from './transaction.enum';
 import { CategoryService } from '../category/category.service';
 import { AccountService } from '../account/account.service';
+import { TagService } from '../tag/tag.service';
 import { MoneyService } from '../money/money.service';
 import { MoneyViewDto } from '../money/money.dto';
 import type { Rate } from '../rate/rate.schema';
@@ -32,13 +34,14 @@ export type ToTransactionDtoOptions = {
   rates: Rate[];
 };
 
-/** Transaction document with category and account populated for DTO mapping. */
+/** Transaction document with category, account and tags populated for DTO mapping. */
 export type TransactionDocumentPopulated = Omit<
   TransactionDocument,
-  'category' | 'account'
+  'category' | 'account' | 'tags'
 > & {
   category: CategoryDocument;
   account: AccountDocument;
+  tags: TagDocument[];
 };
 
 @Injectable()
@@ -52,8 +55,11 @@ export class TransactionService {
     private readonly categoryModel: Model<CategoryDocument>,
     @InjectModel(Account.name)
     private readonly accountModel: Model<AccountDocument>,
+    @InjectModel(Tag.name)
+    private readonly tagModel: Model<TagDocument>,
     private readonly categoryService: CategoryService,
     private readonly accountService: AccountService,
+    private readonly tagService: TagService,
     private readonly i18n: I18nService,
     private readonly moneyService: MoneyService,
   ) {}
@@ -96,6 +102,26 @@ export class TransactionService {
     }
   }
 
+  private async validateTagsBelongToUser(
+    userId: string,
+    tagIds: string[],
+  ): Promise<void> {
+    if (!tagIds?.length) return;
+    const tags = await this.tagModel
+      .find({
+        _id: { $in: tagIds.map((id) => new Types.ObjectId(id)) },
+        user: new Types.ObjectId(userId),
+      })
+      .exec();
+    if (tags.length !== tagIds.length) {
+      throw new BadRequestException(
+        this.i18n.t('transaction.errors.tagNotFound', {
+          defaultValue: 'One or more tags not found',
+        }),
+      );
+    }
+  }
+
   async create(
     userId: string,
     createTransactionDto: CreateTransactionDto,
@@ -107,6 +133,10 @@ export class TransactionService {
     await this.validateAccountBelongsToUser(
       userId,
       createTransactionDto.account,
+    );
+    await this.validateTagsBelongToUser(
+      userId,
+      createTransactionDto.tags ?? [],
     );
 
     const session = await this.connection.startSession();
@@ -120,9 +150,9 @@ export class TransactionService {
           account: new Types.ObjectId(createTransactionDto.account),
           amount: createTransactionDto.amount,
           scale: createTransactionDto.scale,
-          tags: (createTransactionDto.tags ?? [])
-            .map((t) => t.trim())
-            .filter(Boolean),
+          tags: (createTransactionDto.tags ?? []).map(
+            (id) => new Types.ObjectId(id),
+          ),
         });
 
         await transaction.save({ session });
@@ -162,6 +192,7 @@ export class TransactionService {
       const populated = await this.transactionModel
         .findById((created as TransactionDocument)._id)
         .populate('category')
+        .populate('tags')
         .populate({ path: 'account', populate: { path: 'currency' } })
         .exec();
       return (populated ?? created) as TransactionDocument;
@@ -208,6 +239,7 @@ export class TransactionService {
       .find(query)
       .sort({ createdAt: -1 })
       .populate('category')
+      .populate('tags')
       .populate({ path: 'account', populate: { path: 'currency' } })
       .exec();
   }
@@ -222,6 +254,7 @@ export class TransactionService {
         user: new Types.ObjectId(userId),
       })
       .populate('category')
+      .populate('tags')
       .populate({ path: 'account', populate: { path: 'currency' } })
       .exec();
   }
@@ -243,6 +276,9 @@ export class TransactionService {
         updateTransactionDto.account,
       );
     }
+    if (updateTransactionDto.tags !== undefined) {
+      await this.validateTagsBelongToUser(userId, updateTransactionDto.tags);
+    }
 
     const updateData: Record<string, unknown> = {};
 
@@ -262,9 +298,9 @@ export class TransactionService {
       updateData.scale = updateTransactionDto.scale;
     }
     if (updateTransactionDto.tags !== undefined) {
-      updateData.tags = updateTransactionDto.tags
-        .map((t) => t.trim())
-        .filter(Boolean);
+      updateData.tags = updateTransactionDto.tags.map(
+        (id) => new Types.ObjectId(id),
+      );
     }
     if (
       updateTransactionDto.amount !== undefined &&
@@ -304,6 +340,7 @@ export class TransactionService {
     const populated = await this.transactionModel
       .findById(updated._id)
       .populate('category')
+      .populate('tags')
       .populate({ path: 'account', populate: { path: 'currency' } })
       .exec();
 
@@ -375,12 +412,20 @@ export class TransactionService {
       options.settings?.currency,
     );
 
+    const tags = Array.isArray(transaction.tags)
+      ? (transaction.tags as TagDocument[])
+          .filter(
+            (t): t is TagDocument => t && typeof t === 'object' && '_id' in t,
+          )
+          .map((t) => this.tagService.toTagDto(t))
+      : [];
+
     return {
       id: transaction._id.toString(),
       type: transaction.type,
       category,
       comment: transaction.comment ?? '',
-      tags: transaction.tags ?? [],
+      tags,
       amount: {
         original: moneyOriginal,
         converted: converted ?? moneyOriginal,

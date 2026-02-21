@@ -54,8 +54,11 @@ export class Transaction {
   @Prop({ required: true, type: Number, min: 0, max: 18 })
   scale: number;
 
-  @Prop({ type: [String], default: [], trim: true })
-  tags: string[];
+  @Prop({
+    type: [{ type: Types.ObjectId, ref: 'Tag' }],
+    default: [],
+  })
+  tags: Types.ObjectId[];
 
   createdAt: Date;
   updatedAt: Date;
