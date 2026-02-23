@@ -18,6 +18,15 @@ export class TagService {
     private readonly i18n: I18nService,
   ) {}
 
+  generateRandomColor(): string {
+    return (
+      '#' +
+      Math.floor(Math.random() * 0xffffff)
+        .toString(16)
+        .padStart(6, '0')
+    );
+  }
+
   async create(
     userId: string,
     createTagDto: CreateTagDto,
@@ -41,8 +50,8 @@ export class TagService {
       ...createTagDto,
       user: new Types.ObjectId(userId),
       name: createTagDto.name.trim(),
-      color: createTagDto.color?.trim() ?? '#6B7280',
-      icon: createTagDto.icon?.trim() ?? 'tag',
+      color: createTagDto.color?.trim() ?? this.generateRandomColor(),
+      icon: createTagDto.icon?.trim(),
     });
 
     await tag.save();

@@ -21,14 +21,14 @@ export class Tag {
     required: true,
     trim: true,
     minlength: 1,
-    maxlength: 100,
+    maxlength: 20,
   })
   name: string;
 
-  @Prop({ trim: true, default: '#6B7280' })
+  @Prop({ trim: true })
   color: string;
 
-  @Prop({ trim: true, default: 'tag' })
+  @Prop({ trim: true })
   icon: string;
 
   createdAt: Date;

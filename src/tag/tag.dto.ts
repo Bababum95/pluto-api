@@ -9,17 +9,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
 
 export class CreateTagDto {
-  @ApiProperty({ example: 'food', minLength: 1, maxLength: 100 })
+  @ApiProperty({ example: 'food', minLength: 1, maxLength: 20 })
   @IsString()
   @IsNotEmpty()
   @MinLength(1)
-  @MaxLength(100)
+  @MaxLength(20)
   name: string;
 
   @ApiPropertyOptional({
     example: '#6B7280',
     description: 'Tag color in hex format',
-    default: '#6B7280',
   })
   @IsOptional()
   @IsString()
@@ -28,7 +27,6 @@ export class CreateTagDto {
   @ApiPropertyOptional({
     example: 'tag',
     description: 'Icon name',
-    default: 'tag',
   })
   @IsOptional()
   @IsString()
