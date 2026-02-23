@@ -7,7 +7,7 @@ import { CURRENCY_API_CLIENT } from '../currency/currency.constants';
 import type { CurrencyApiClient } from '../currency/currency.types';
 
 import { Rate, RateDocument } from './rate.schema';
-import { CreateRateDto, UpdateRateDto } from './rate.dto';
+import { CreateRateDto, UpdateRateDto, RateDto } from './rate.dto';
 import { RateType } from './rate.types';
 import { RATES_TTL_MS_DEFAULT } from './rate.constants';
 
@@ -28,16 +28,29 @@ export class RateService {
     return raw ? parseInt(raw, 10) : RATES_TTL_MS_DEFAULT;
   }
 
-  async create(createRateDto: CreateRateDto): Promise<Rate> {
+  /**
+   * Map Rate document to normalized API DTO (id as string, dates as ISO).
+   */
+  toRateDto(rate: RateDocument): RateDto {
+    return {
+      id: rate._id.toString(),
+      code: rate.code,
+      value: rate.value,
+      createdAt: rate.createdAt.toISOString(),
+      updatedAt: rate.updatedAt.toISOString(),
+    };
+  }
+
+  async create(createRateDto: CreateRateDto): Promise<RateDocument> {
     const createdRate = new this.rateModel(createRateDto);
     return createdRate.save();
   }
 
-  async findAll(): Promise<Rate[]> {
+  async findAll(): Promise<RateDocument[]> {
     return this.rateModel.find().exec();
   }
 
-  async findOne(id: string): Promise<Rate> {
+  async findOne(id: string): Promise<RateDocument> {
     const rate = await this.rateModel.findById(id).exec();
     if (!rate) {
       throw new Error('Rate not found');
@@ -55,7 +68,7 @@ export class RateService {
     return rate;
   }
 
-  async findByCode(code: string): Promise<Rate | null> {
+  async findByCode(code: string): Promise<RateDocument> {
     const rate = await this.rateModel.findOne({ code }).exec();
     if (!rate) {
       throw new Error('Rate not found');
@@ -73,7 +86,10 @@ export class RateService {
     return rate;
   }
 
-  async update(id: string, updateRateDto: UpdateRateDto): Promise<Rate> {
+  async update(
+    id: string,
+    updateRateDto: UpdateRateDto,
+  ): Promise<RateDocument> {
     const rate = await this.rateModel
       .findByIdAndUpdate(id, updateRateDto, { new: true })
       .exec();
@@ -83,7 +99,7 @@ export class RateService {
     return rate;
   }
 
-  async remove(id: string): Promise<Rate> {
+  async remove(id: string): Promise<RateDocument> {
     const rate = await this.rateModel.findByIdAndDelete(id).exec();
     if (!rate) {
       throw new Error('Rate not found');
@@ -94,7 +110,7 @@ export class RateService {
   /**
    * Get the latest updated rate from database
    */
-  async getLatestUpdatedRate(): Promise<Rate | null> {
+  async getLatestUpdatedRate(): Promise<RateDocument | null> {
     const result = await this.rateModel
       .findOne()
       .sort({ updatedAt: -1 })
@@ -153,7 +169,7 @@ export class RateService {
   /**
    * Get latest valid rate, update if expired
    */
-  async getLatestValidRate(): Promise<Rate[]> {
+  async getLatestValidRate(): Promise<RateDocument[]> {
     await this.ensureFreshRates();
 
     return this.findAll();
