@@ -12,6 +12,7 @@ import { Account, type AccountDocument } from '../account/account.schema';
 import {
   CreateTransferDto,
   TransferDto,
+  type FeeDto,
   type TransferSideDto,
   UpdateTransferDto,
 } from './transfer.dto';
@@ -145,6 +146,16 @@ export class TransferService {
     };
   }
 
+  private toFeePersistenceData(fee: FeeDto | undefined): {
+    value: number;
+    scale: number;
+  } {
+    return {
+      value: fee?.value ?? 0,
+      scale: fee?.scale ?? 0,
+    };
+  }
+
   async create(
     userId: string,
     createTransferDto: CreateTransferDto,
@@ -170,6 +181,7 @@ export class TransferService {
           from: this.toTransferPersistenceData(createTransferDto.from),
           to: this.toTransferPersistenceData(createTransferDto.to),
           rate: createTransferDto.rate,
+          fee: this.toFeePersistenceData(createTransferDto.fee),
         });
 
         await transfer.save({ session });
@@ -268,6 +280,13 @@ export class TransferService {
           updateTransferDto.to,
         );
         const nextRate = updateTransferDto.rate ?? current.rate;
+        const nextFee =
+          updateTransferDto.fee !== undefined
+            ? this.toFeePersistenceData(updateTransferDto.fee)
+            : {
+                value: current.fee?.value ?? 0,
+                scale: current.fee?.scale ?? 0,
+              };
 
         this.ensurePositiveValues(nextFrom.value, nextTo.value, nextRate);
         await this.validateTransferAccounts(userId, nextFrom, nextTo, session);
@@ -328,6 +347,7 @@ export class TransferService {
               from: this.toTransferPersistenceData(nextFrom),
               to: this.toTransferPersistenceData(nextTo),
               rate: nextRate,
+              fee: nextFee,
             },
             { new: true, session },
           )
@@ -414,6 +434,10 @@ export class TransferService {
         scale: transfer.to.scale,
       },
       rate: transfer.rate,
+      fee: {
+        value: transfer.fee?.value ?? 0,
+        scale: transfer.fee?.scale ?? 0,
+      },
       createdAt: transfer.createdAt.toISOString(),
       updatedAt: transfer.updatedAt.toISOString(),
     };

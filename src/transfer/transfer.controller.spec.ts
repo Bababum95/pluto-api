@@ -21,6 +21,7 @@ type MockedTransfer = {
     scale: number;
   };
   rate: number;
+  fee: { value: number; scale: number };
   createdAt: Date;
   updatedAt: Date;
 };
@@ -55,6 +56,7 @@ describe('TransferController', () => {
       scale: 2,
     },
     rate: 0.91,
+    fee: { value: 0, scale: 0 },
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -64,6 +66,7 @@ describe('TransferController', () => {
     from: mockTransfer.from,
     to: mockTransfer.to,
     rate: mockTransfer.rate,
+    fee: mockTransfer.fee,
     createdAt: mockTransfer.createdAt.toISOString(),
     updatedAt: mockTransfer.updatedAt.toISOString(),
   };

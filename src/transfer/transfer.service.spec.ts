@@ -77,6 +77,7 @@ describe('TransferService', () => {
       scale: 2,
     },
     rate: 0.91,
+    fee: { value: 0, scale: 0 },
     createdAt: new Date(),
     updatedAt: new Date(),
   } as unknown as TransferDocument;
@@ -412,6 +413,7 @@ describe('TransferService', () => {
           scale: 2,
         },
         rate: 0.91,
+        fee: { value: 0, scale: 0 },
         createdAt: mockTransfer.createdAt.toISOString(),
         updatedAt: mockTransfer.updatedAt.toISOString(),
       });

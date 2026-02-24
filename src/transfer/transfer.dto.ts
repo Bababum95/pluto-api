@@ -3,6 +3,7 @@ import {
   IsInt,
   IsMongoId,
   IsNumber,
+  IsOptional,
   IsPositive,
   Max,
   Min,
@@ -10,6 +11,29 @@ import {
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
+
+export class FeeDto {
+  @ApiProperty({
+    example: 50,
+    description: 'Fee amount in smallest units',
+  })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  value: number;
+
+  @ApiProperty({
+    example: 2,
+    description: 'Decimal places (scale) for fee',
+    minimum: 0,
+    maximum: 18,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(18)
+  scale: number;
+}
 
 export class TransferSideDto {
   @ApiProperty({
@@ -66,6 +90,17 @@ export class CreateTransferDto {
   @IsNumber()
   @IsPositive()
   rate: number;
+
+  @ApiProperty({
+    type: FeeDto,
+    description:
+      'Transfer fee (value + scale). Optional, defaults to { value: 0, scale: 0 }.',
+    required: false,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FeeDto)
+  fee?: FeeDto;
 }
 
 export class UpdateTransferDto extends PartialType(CreateTransferDto) {}
@@ -82,6 +117,9 @@ export class TransferDto {
 
   @ApiProperty({ example: 0.91 })
   rate: number;
+
+  @ApiProperty({ type: FeeDto, description: 'Transfer fee' })
+  fee: FeeDto;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;
