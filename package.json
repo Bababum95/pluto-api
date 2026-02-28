@@ -16,8 +16,7 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "patch": "pnpm version patch",
-    "update:rates": "npx ts-node -r tsconfig-paths/register src/scripts/update-rates.ts",
-    "migrate:transaction-date": "npx ts-node -r tsconfig-paths/register src/scripts/migrate-transaction-date.ts"
+    "update:rates": "npx ts-node -r tsconfig-paths/register src/scripts/update-rates.ts"
   },
   "dependencies": {
     "@everapi/currencyapi-js": "^1.0.6",
