@@ -27,6 +27,7 @@ type MockedTransaction = {
   amount: number;
   scale: number;
   tags: { id: string; name: string }[];
+  date: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -71,6 +72,7 @@ describe('TransactionController', () => {
     amount: -150050,
     scale: 2,
     tags: [{ id: '507f1f77bcf86cd799439015', name: 'food' }],
+    date: '2024-01-15',
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -130,6 +132,7 @@ describe('TransactionController', () => {
         updatedAt: mockTransaction.updatedAt.toISOString(),
       },
     ],
+    date: '2024-01-15',
     createdAt: mockTransaction.createdAt.toISOString(),
     updatedAt: mockTransaction.updatedAt.toISOString(),
   };

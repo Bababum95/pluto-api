@@ -150,6 +150,7 @@ export class TransactionService {
           account: new Types.ObjectId(createTransactionDto.account),
           amount: createTransactionDto.amount,
           scale: createTransactionDto.scale,
+          date: createTransactionDto.date,
           tags: (createTransactionDto.tags ?? []).map(
             (id) => new Types.ObjectId(id),
           ),
@@ -209,22 +210,20 @@ export class TransactionService {
       user: new Types.ObjectId(userId),
     };
 
-    if (filters?.from) {
-      query.createdAt = {
-        ...(query.createdAt as object),
-        $gte: new Date(filters.from),
-      };
-    }
-    if (filters?.to) {
-      const end = new Date(filters.to);
-      if (filters.to.length <= 10) {
-        end.setUTCHours(23, 59, 59, 999);
+    if (filters?.from || filters?.to) {
+      const dateFilter: Record<string, string> = {};
+
+      if (filters.from) {
+        dateFilter.$gte = filters.from;
       }
-      query.createdAt = {
-        ...(query.createdAt as object),
-        $lte: end,
-      };
+
+      if (filters.to) {
+        dateFilter.$lte = filters.to;
+      }
+
+      query.date = dateFilter;
     }
+
     if (filters?.type) {
       query.type = filters.type;
     }
@@ -237,7 +236,7 @@ export class TransactionService {
 
     return this.transactionModel
       .find(query)
-      .sort({ createdAt: -1 })
+      .sort({ date: -1, createdAt: -1 })
       .populate('category')
       .populate('tags')
       .populate({ path: 'account', populate: { path: 'currency' } })
@@ -301,6 +300,9 @@ export class TransactionService {
       updateData.tags = updateTransactionDto.tags.map(
         (id) => new Types.ObjectId(id),
       );
+    }
+    if (updateTransactionDto.date !== undefined) {
+      updateData.date = updateTransactionDto.date;
     }
     if (
       updateTransactionDto.amount !== undefined &&
@@ -430,6 +432,7 @@ export class TransactionService {
         original: moneyOriginal,
         converted: converted ?? moneyOriginal,
       },
+      date: transaction.date,
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
     };

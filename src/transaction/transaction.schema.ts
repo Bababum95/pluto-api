@@ -60,10 +60,14 @@ export class Transaction {
   })
   tags: Types.ObjectId[];
 
+  /** Transaction date only, ISO date string YYYY-MM-DD. No default. */
+  @Prop({ type: String, required: true, index: true })
+  date: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
 
-TransactionSchema.index({ user: 1, createdAt: -1 });
+TransactionSchema.index({ user: 1, date: -1 });

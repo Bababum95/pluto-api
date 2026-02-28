@@ -106,6 +106,7 @@ describe('TransactionService', () => {
     amount: -150050,
     scale: 2,
     tags: [tagId],
+    date: '2024-01-15',
     createdAt: new Date(),
     updatedAt: new Date(),
   } as unknown as TransactionDocument;
@@ -482,6 +483,7 @@ describe('TransactionService', () => {
           name: 'food',
         }),
       );
+      expect(dto.date).toBe('2024-01-15');
       expect(dto.createdAt).toBe(mockTransaction.createdAt.toISOString());
       expect(dto.updatedAt).toBe(mockTransaction.updatedAt.toISOString());
     });

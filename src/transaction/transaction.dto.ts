@@ -42,7 +42,8 @@ export class TransactionAmountViewDto {
 export class TransactionFilterDto {
   @ApiPropertyOptional({
     example: '2024-01-01',
-    description: 'Start of period (inclusive). ISO date or datetime.',
+    description:
+      'Start of period by transaction date (inclusive). ISO date or datetime.',
   })
   @IsOptional()
   @IsDateString()
@@ -50,7 +51,8 @@ export class TransactionFilterDto {
 
   @ApiPropertyOptional({
     example: '2024-12-31',
-    description: 'End of period (inclusive). ISO date or datetime.',
+    description:
+      'End of period by transaction date (inclusive). ISO date or datetime.',
   })
   @IsOptional()
   @IsDateString()
@@ -135,6 +137,14 @@ export class CreateTransactionDto {
   @IsArray()
   @IsMongoId({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({
+    example: '2024-01-15',
+    description: 'Transaction date (YYYY-MM-DD).',
+  })
+  @IsDateString()
+  @IsNotEmpty()
+  date: string;
 }
 
 export class UpdateTransactionDto extends PartialType(CreateTransactionDto) {}
@@ -163,6 +173,12 @@ export class TransactionDto {
     description: 'Tag entities attached to the transaction',
   })
   tags: TagDto[];
+
+  @ApiProperty({
+    example: '2024-01-15',
+    description: 'Transaction date (date only)',
+  })
+  date: string;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;
