@@ -7,12 +7,14 @@ The format follows Conventional Commits. Versions are listed in reverse chronolo
 
 ---
 
-## Unreleased
+## 06.03.2026 — v0.0.6
 
 ### ✨ Features
 
-- add transaction date handling in transaction module
+- implement category reordering functionality
 - update currency module to support ESM dynamic imports
+- add transaction date handling in transaction module
+- add fee structure to transfer module
 
 ### ♻️ Refactoring
 
