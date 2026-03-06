@@ -7,6 +7,7 @@ import { Model, Types } from 'mongoose';
 import { Category, CategoryDocument } from './category.schema';
 import { CategoryService } from './category.service';
 import type { CreateCategoryDto, UpdateCategoryDto } from './category.dto';
+import { TransactionType } from '../transaction/transaction.enum';
 
 const mockI18nService = {
   t: (key: string, options?: { defaultValue?: string }): string => {
@@ -34,6 +35,7 @@ describe('CategoryService', () => {
     findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     findOneAndDelete: jest.Mock;
+    bulkWrite: jest.Mock;
   };
   let saveMock: jest.Mock;
 
@@ -78,6 +80,7 @@ describe('CategoryService', () => {
     MockModel.findById = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndUpdate = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndDelete = jest.fn().mockReturnValue(chainNull);
+    MockModel.bulkWrite = jest.fn().mockResolvedValue({ ok: 1 });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +106,9 @@ describe('CategoryService', () => {
     MockModel.findById.mockReturnValue(createChain(null));
     MockModel.findOneAndUpdate.mockReturnValue(createChain(null));
     MockModel.findOneAndDelete.mockReturnValue(createChain(null));
+    (
+      MockModel as unknown as { bulkWrite: jest.Mock }
+    ).bulkWrite.mockResolvedValue({ ok: 1 });
   });
 
   it('should be defined', () => {
@@ -115,6 +121,7 @@ describe('CategoryService', () => {
         color: '#FF5733',
         icon: 'wallet',
         name: 'Food & Dining',
+        type: TransactionType.EXPENSE,
       };
       mockCategoryModel.findById.mockReturnValue(createChain(mockCategory));
 
@@ -134,6 +141,7 @@ describe('CategoryService', () => {
         color: '#FF5733',
         icon: 'wallet',
         name: 'Food & Dining',
+        type: TransactionType.EXPENSE,
       };
       mockCategoryModel.findOne.mockReturnValue(createChain(mockCategory));
 
@@ -225,6 +233,67 @@ describe('CategoryService', () => {
     });
   });
 
+  describe('reorder', () => {
+    const categoryId2 = new Types.ObjectId('507f1f77bcf86cd799439013');
+    const categoryId3 = new Types.ObjectId('507f1f77bcf86cd799439014');
+
+    it('should update order for each category by index and return void', async () => {
+      const ids = [categoryId.toString(), categoryId2.toString()];
+      const foundCategories = [{ _id: categoryId }, { _id: categoryId2 }];
+      const findChain = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(foundCategories),
+      };
+      mockCategoryModel.find.mockReturnValue(findChain);
+      (
+        mockCategoryModel as unknown as { bulkWrite: jest.Mock }
+      ).bulkWrite.mockResolvedValue({ ok: 1 });
+
+      await service.reorder(userId, ids);
+
+      expect(mockCategoryModel.find).toHaveBeenCalledWith({
+        _id: { $in: [categoryId, categoryId2] },
+        user: new Types.ObjectId(userId),
+      });
+      expect(findChain.select).toHaveBeenCalledWith('_id');
+      expect(
+        (mockCategoryModel as unknown as { bulkWrite: jest.Mock }).bulkWrite,
+      ).toHaveBeenCalledWith([
+        {
+          updateOne: {
+            filter: { _id: categoryId, user: new Types.ObjectId(userId) },
+            update: { $set: { order: 0 } },
+          },
+        },
+        {
+          updateOne: {
+            filter: { _id: categoryId2, user: new Types.ObjectId(userId) },
+            update: { $set: { order: 1 } },
+          },
+        },
+      ]);
+    });
+
+    it('should throw NotFoundException when not all category ids belong to user', async () => {
+      const ids = [categoryId.toString(), categoryId3.toString()];
+      const foundCategories = [{ _id: categoryId }];
+      const findChain = {
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(foundCategories),
+      };
+      mockCategoryModel.find.mockReturnValue(findChain);
+
+      await expect(service.reorder(userId, ids)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(
+        (mockCategoryModel as unknown as { bulkWrite: jest.Mock }).bulkWrite,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('should remove a category and return true', async () => {
       mockCategoryModel.findOneAndDelete.mockReturnValue(
@@ -258,6 +327,8 @@ describe('CategoryService', () => {
         color: mockCategory.color,
         icon: mockCategory.icon,
         name: mockCategory.name,
+        type: (mockCategory as { type?: string }).type,
+        order: (mockCategory as { order?: number }).order ?? 0,
         createdAt: mockCategory.createdAt.toISOString(),
         updatedAt: mockCategory.updatedAt.toISOString(),
       });

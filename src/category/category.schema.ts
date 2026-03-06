@@ -46,6 +46,12 @@ export class Category {
   })
   type: TransactionType;
 
+  @Prop({
+    required: false,
+    type: Number,
+  })
+  order?: number;
+
   createdAt: Date;
   updatedAt: Date;
 }

@@ -63,7 +63,7 @@ export class CategoryService {
   async findAll(userId: string): Promise<CategoryDocument[]> {
     return this.categoryModel
       .find({ user: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 })
+      .sort({ order: 1, createdAt: -1 })
       .exec();
   }
 
@@ -126,6 +126,34 @@ export class CategoryService {
     return category;
   }
 
+  async reorder(userId: string, categoryIds: string[]): Promise<void> {
+    const userObjectId = new Types.ObjectId(userId);
+    const ids = categoryIds.map((id) => new Types.ObjectId(id));
+
+    const categories = await this.categoryModel
+      .find({ _id: { $in: ids }, user: userObjectId })
+      .select('_id')
+      .lean()
+      .exec();
+
+    if (categories.length !== ids.length) {
+      throw new NotFoundException(
+        this.i18n.t('category.errors.notFound', {
+          defaultValue: 'Category not found',
+        }),
+      );
+    }
+
+    const bulkOps = categoryIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new Types.ObjectId(id), user: userObjectId },
+        update: { $set: { order: index } },
+      },
+    }));
+
+    await this.categoryModel.bulkWrite(bulkOps);
+  }
+
   async remove(userId: string, id: string): Promise<boolean> {
     const result = await this.categoryModel
       .findOneAndDelete({
@@ -145,13 +173,14 @@ export class CategoryService {
     return true;
   }
 
-  toCategoryDto(category: CategoryDocument): CategoryDto {
+  toCategoryDto(category: CategoryDocument, order?: number): CategoryDto {
     return {
       id: category._id.toString(),
       color: category.color,
       icon: category.icon,
       name: category.name,
       type: category.type,
+      order: category.order ?? order ?? 0,
       createdAt: category.createdAt.toISOString(),
       updatedAt: category.updatedAt.toISOString(),
     };

@@ -4,6 +4,9 @@ import {
   MinLength,
   MaxLength,
   IsEnum,
+  IsArray,
+  ArrayMinSize,
+  IsMongoId,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
@@ -40,6 +43,18 @@ export class CreateCategoryDto {
 
 export class UpdateCategoryDto extends PartialType(CreateCategoryDto) {}
 
+export class ReorderCategoriesDto {
+  @ApiProperty({
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    description: 'Category IDs in the desired order (index = display order)',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsMongoId({ each: true })
+  ids: string[];
+}
+
 export class CategoryDto {
   @ApiProperty()
   id: string;
@@ -55,6 +70,9 @@ export class CategoryDto {
 
   @ApiProperty({ example: 'expense' })
   type: TransactionType;
+
+  @ApiProperty({ example: 1 })
+  order: number;
 
   @ApiProperty({ example: '2021-01-01T10:00:00.000Z' })
   createdAt: string;

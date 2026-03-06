@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 
-import type { CreateCategoryDto, UpdateCategoryDto } from './category.dto';
+import { TransactionType } from '../transaction/transaction.enum';
+import type { RequestUser } from '../auth/auth.dto';
+
 import { CategoryController } from './category.controller';
 import { CategoryService } from './category.service';
-import type { RequestUser } from '../auth/auth.dto';
+import type { CreateCategoryDto, UpdateCategoryDto } from './category.dto';
 
 jest.mock('./category.service', () => ({
   CategoryService: jest.fn(),
@@ -28,6 +30,7 @@ describe('CategoryController', () => {
     findOne: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
+    reorder: jest.Mock;
     toCategoryDto: jest.Mock;
   };
 
@@ -59,6 +62,14 @@ describe('CategoryController', () => {
     color: '#FF5733',
     icon: 'wallet',
     name: 'Food & Dining',
+    type: TransactionType.EXPENSE,
+  };
+
+  const mockI18n = {
+    t: (key: string): string =>
+      key === 'category.reorder.success'
+        ? 'Categories have been reordered.'
+        : key,
   };
 
   beforeEach(async () => {
@@ -68,6 +79,7 @@ describe('CategoryController', () => {
       findOne: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      reorder: jest.fn(),
       toCategoryDto: jest.fn(),
     };
 
@@ -136,6 +148,37 @@ describe('CategoryController', () => {
       await expect(controller.findOne(mockUser, 'invalid')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('reorder', () => {
+    it('should reorder categories and return status and message', async () => {
+      const ids = [mockCategory._id, '507f1f77bcf86cd799439013'];
+      const body = { ids };
+      service.reorder.mockResolvedValue(undefined);
+
+      const result = await controller.reorder(
+        mockUser,
+        body,
+        mockI18n as never,
+      );
+
+      expect(service.reorder).toHaveBeenCalledWith(mockUser.userId, ids);
+      expect(result).toEqual({
+        status: 200,
+        message: 'Categories have been reordered.',
+      });
+    });
+
+    it('should throw NotFoundException when one or more categories not found', async () => {
+      const body = { ids: [mockCategory._id, '507f1f77bcf86cd799439099'] };
+      service.reorder.mockRejectedValue(
+        new NotFoundException('Category not found'),
+      );
+
+      await expect(
+        controller.reorder(mockUser, body, mockI18n as never),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

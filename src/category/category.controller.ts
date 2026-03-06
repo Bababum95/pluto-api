@@ -10,6 +10,7 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import {
   ApiTags,
   ApiOperation,
@@ -22,6 +23,7 @@ import {
   CreateCategoryDto,
   UpdateCategoryDto,
   CategoryDto,
+  ReorderCategoriesDto,
 } from './category.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -62,9 +64,9 @@ export class CategoryController {
   })
   async findAll(@UserDecorator() user: RequestUser): Promise<CategoryDto[]> {
     const categories = await this.categoryService.findAll(user.userId);
-    return categories.map((category) =>
-      this.categoryService.toCategoryDto(category),
-    );
+    return categories.map((category, index) => {
+      return this.categoryService.toCategoryDto(category, index);
+    });
   }
 
   @Get(':id')
@@ -84,6 +86,41 @@ export class CategoryController {
       throw new NotFoundException('Category not found');
     }
     return this.categoryService.toCategoryDto(category);
+  }
+
+  @Patch('reorder')
+  @ApiOperation({
+    summary:
+      'Reorder categories by providing list of category IDs (index = order)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories have been reordered.',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'number', example: 200 },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'One or more categories not found.',
+  })
+  async reorder(
+    @UserDecorator() user: RequestUser,
+    @Body() body: ReorderCategoriesDto,
+    @I18n() i18n: I18nContext,
+  ): Promise<{ status: number; message: string }> {
+    const { ids } = body;
+    await this.categoryService.reorder(user.userId, ids);
+    return {
+      status: HttpStatus.OK,
+      message: i18n.t('category.reorder.success', {
+        defaultValue: 'Categories have been reordered.',
+      }),
+    };
   }
 
   @Patch(':id')
