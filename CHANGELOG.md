@@ -7,6 +7,14 @@ The format follows Conventional Commits. Versions are listed in reverse chronolo
 
 ---
 
+## 07.03.2026 — v0.0.7
+
+### ✨ Features
+
+- add account data to TransactionDto and update service response
+
+---
+
 ## 06.03.2026 — v0.0.6
 
 ### ✨ Features
