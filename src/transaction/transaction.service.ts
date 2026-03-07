@@ -424,6 +424,7 @@ export class TransactionService {
 
     return {
       id: transaction._id.toString(),
+      account,
       type: transaction.type,
       category,
       comment: transaction.comment ?? '',

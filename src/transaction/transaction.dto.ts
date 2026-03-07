@@ -153,6 +153,9 @@ export class TransactionDto {
   @ApiProperty()
   id: string;
 
+  @ApiProperty({ description: 'Account data', type: AccountDto })
+  account: AccountDto;
+
   @ApiProperty({ example: 'expense', enum: TransactionType })
   type: TransactionType;
 
