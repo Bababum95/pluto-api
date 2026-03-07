@@ -17,6 +17,7 @@ import { SettingsModule } from './settings/settings.module';
 import { TagModule } from './tag/tag.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { TransferModule } from './transfer/transfer.module';
+import { PasskeyModule } from './passkey/passkey.module';
 import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
 
 @Module({
@@ -48,6 +49,7 @@ import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
     TagModule,
     TransactionModule,
     TransferModule,
+    PasskeyModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGlobalGuard }],
