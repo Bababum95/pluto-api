@@ -26,6 +26,7 @@ import {
   UpdateTransactionDto,
   TransactionDto,
   TransactionFilterDto,
+  UpdateTransactionOptionsDto,
 } from './transaction.dto';
 
 /** Options for toTransactionDto: settings (with optional currency) and rates for conversion. */
@@ -262,6 +263,7 @@ export class TransactionService {
     userId: string,
     id: string,
     updateTransactionDto: UpdateTransactionDto,
+    options?: UpdateTransactionOptionsDto,
   ): Promise<TransactionDocument> {
     if (updateTransactionDto.category) {
       await this.validateCategoryBelongsToUser(
@@ -279,74 +281,136 @@ export class TransactionService {
       await this.validateTagsBelongToUser(userId, updateTransactionDto.tags);
     }
 
-    const updateData: Record<string, unknown> = {};
+    const session = await this.connection.startSession();
 
-    if (updateTransactionDto.type !== undefined) {
-      updateData.type = updateTransactionDto.type;
-    }
-    if (updateTransactionDto.category !== undefined) {
-      updateData.category = new Types.ObjectId(updateTransactionDto.category);
-    }
-    if (updateTransactionDto.comment !== undefined) {
-      updateData.comment = updateTransactionDto.comment.trim();
-    }
-    if (updateTransactionDto.account !== undefined) {
-      updateData.account = new Types.ObjectId(updateTransactionDto.account);
-    }
-    if (updateTransactionDto.scale !== undefined) {
-      updateData.scale = updateTransactionDto.scale;
-    }
-    if (updateTransactionDto.tags !== undefined) {
-      updateData.tags = updateTransactionDto.tags.map(
-        (id) => new Types.ObjectId(id),
-      );
-    }
-    if (updateTransactionDto.date !== undefined) {
-      updateData.date = updateTransactionDto.date;
-    }
-    if (
-      updateTransactionDto.amount !== undefined &&
-      updateTransactionDto.scale !== undefined
-    ) {
-      updateData.amount = updateTransactionDto.amount;
-    } else if (updateTransactionDto.amount !== undefined) {
-      const existing = await this.transactionModel
-        .findOne({ _id: id, user: new Types.ObjectId(userId) })
+    try {
+      const result = await session.withTransaction(async () => {
+        const existing = await this.transactionModel
+          .findOne({ _id: id, user: new Types.ObjectId(userId) })
+          .session(session)
+          .exec();
+
+        if (!existing) {
+          throw new NotFoundException(
+            this.i18n.t('transaction.errors.notFound', {
+              defaultValue: 'Transaction not found',
+            }),
+          );
+        }
+
+        const updateData: Record<string, unknown> = {};
+
+        if (updateTransactionDto.type !== undefined) {
+          updateData.type = updateTransactionDto.type;
+        }
+        if (updateTransactionDto.category !== undefined) {
+          updateData.category = new Types.ObjectId(
+            updateTransactionDto.category,
+          );
+        }
+        if (updateTransactionDto.comment !== undefined) {
+          updateData.comment = updateTransactionDto.comment.trim();
+        }
+        if (updateTransactionDto.account !== undefined) {
+          updateData.account = new Types.ObjectId(updateTransactionDto.account);
+        }
+        if (updateTransactionDto.scale !== undefined) {
+          updateData.scale = updateTransactionDto.scale;
+        }
+        if (updateTransactionDto.tags !== undefined) {
+          updateData.tags = updateTransactionDto.tags.map(
+            (id) => new Types.ObjectId(id),
+          );
+        }
+        if (updateTransactionDto.date !== undefined) {
+          updateData.date = updateTransactionDto.date;
+        }
+
+        const newAmount =
+          updateTransactionDto.amount !== undefined
+            ? updateTransactionDto.amount
+            : existing.amount;
+
+        if (updateTransactionDto.amount !== undefined) {
+          updateData.amount = updateTransactionDto.amount;
+        }
+
+        const newAccountId = updateTransactionDto.account
+          ? new Types.ObjectId(updateTransactionDto.account)
+          : existing.account;
+
+        if (options?.recalcBalance) {
+          const oldSigned =
+            existing.type === TransactionType.EXPENSE
+              ? new Decimal(existing.amount).neg()
+              : new Decimal(existing.amount);
+
+          const newSigned =
+            (updateTransactionDto.type ?? existing.type) ===
+            TransactionType.EXPENSE
+              ? new Decimal(newAmount).neg()
+              : new Decimal(newAmount);
+
+          const oldAccountId = existing.account.toString();
+          const newAccountIdStr = newAccountId.toString();
+
+          if (oldAccountId !== newAccountIdStr) {
+            // Return old amount back to old account
+            await this.accountModel.updateOne(
+              { _id: existing.account, user: new Types.ObjectId(userId) },
+              { $inc: { balance: oldSigned.neg().toNumber() } },
+              { session },
+            );
+
+            // Apply new amount to new account
+            await this.accountModel.updateOne(
+              { _id: newAccountId, user: new Types.ObjectId(userId) },
+              { $inc: { balance: newSigned.toNumber() } },
+              { session },
+            );
+          } else {
+            const diff = newSigned.minus(oldSigned);
+
+            if (!diff.isZero()) {
+              await this.accountModel.updateOne(
+                { _id: existing.account, user: new Types.ObjectId(userId) },
+                { $inc: { balance: diff.toNumber() } },
+                { session },
+              );
+            }
+          }
+        }
+
+        const updated = await this.transactionModel
+          .findOneAndUpdate(
+            { _id: id, user: new Types.ObjectId(userId) },
+            updateData,
+            { new: true, session },
+          )
+          .exec();
+
+        if (!updated) {
+          throw new NotFoundException(
+            this.i18n.t('transaction.errors.notFound', {
+              defaultValue: 'Transaction not found',
+            }),
+          );
+        }
+
+        return updated;
+      });
+
+      const populated = await this.transactionModel
+        .findById((result as TransactionDocument)._id)
+        .populate('category')
+        .populate('tags')
+        .populate({ path: 'account', populate: { path: 'currency' } })
         .exec();
-      if (!existing) {
-        throw new NotFoundException(
-          this.i18n.t('transaction.errors.notFound', {
-            defaultValue: 'Transaction not found',
-          }),
-        );
-      }
-      updateData.amount = updateTransactionDto.amount;
+
+      return (populated ?? result) as TransactionDocument;
+    } finally {
+      await session.endSession();
     }
-
-    const updated = await this.transactionModel
-      .findOneAndUpdate(
-        { _id: id, user: new Types.ObjectId(userId) },
-        updateData,
-        { new: true },
-      )
-      .exec();
-
-    if (!updated) {
-      throw new NotFoundException(
-        this.i18n.t('transaction.errors.notFound', {
-          defaultValue: 'Transaction not found',
-        }),
-      );
-    }
-
-    const populated = await this.transactionModel
-      .findById(updated._id)
-      .populate('category')
-      .populate('tags')
-      .populate({ path: 'account', populate: { path: 'currency' } })
-      .exec();
-
-    return (populated ?? updated) as TransactionDocument;
   }
 
   async remove(userId: string, id: string): Promise<boolean> {

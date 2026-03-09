@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsArray,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
@@ -148,6 +149,17 @@ export class CreateTransactionDto {
 }
 
 export class UpdateTransactionDto extends PartialType(CreateTransactionDto) {}
+export class UpdateTransactionOptionsDto {
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Whether account balance should be recalculated after transaction update',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  recalcBalance?: boolean;
+}
 
 export class TransactionDto {
   @ApiProperty()
@@ -190,8 +202,8 @@ export class TransactionDto {
   updatedAt: string;
 }
 
-export type CreateTransactionResponseDto = {
+export type TransactionMutationResponseDto = {
   transaction: TransactionDto;
-  account: AccountDto;
+  accounts: AccountDto[];
   summary: AccountSummaryDto;
 };

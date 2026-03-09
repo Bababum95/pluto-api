@@ -26,8 +26,9 @@ import {
   CreateTransactionDto,
   UpdateTransactionDto,
   TransactionDto,
-  CreateTransactionResponseDto,
+  TransactionMutationResponseDto,
   TransactionFilterDto,
+  UpdateTransactionOptionsDto,
 } from './transaction.dto';
 import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
@@ -66,27 +67,22 @@ export class TransactionController {
   async create(
     @UserDecorator() user: RequestUser,
     @Body() createTransactionDto: CreateTransactionDto,
-  ): Promise<CreateTransactionResponseDto> {
+  ): Promise<TransactionMutationResponseDto> {
     const transaction = await this.transactionService.create(
       user.userId,
       createTransactionDto,
     );
     const account = await this.accountService.findOne(
       user.userId,
-      createTransactionDto.account,
+      transaction.account._id.toString(),
     );
     const summary = await this.accountService.getSummary(user.userId);
-
-    if (!account) {
-      throw new NotFoundException('Account not found');
-    }
-
     const settings = await this.settingsService.findByUserId(user.userId);
     const rates = await this.rateService.getLatestValidRate();
 
     return {
       summary,
-      account: this.accountService.toAccountDto(account),
+      accounts: [this.accountService.toAccountDto(account)],
       transaction: this.transactionService.toTransactionDto(transaction, {
         settings,
         rates,
@@ -158,18 +154,52 @@ export class TransactionController {
     @UserDecorator() user: RequestUser,
     @Param('id') id: string,
     @Body() updateTransactionDto: UpdateTransactionDto,
-  ): Promise<TransactionDto> {
+    @Query() options?: UpdateTransactionOptionsDto,
+  ): Promise<TransactionMutationResponseDto> {
+    const oldTransaction = await this.transactionService.findOne(
+      user.userId,
+      id,
+    );
+
+    const oldAccountId = oldTransaction?.account?._id?.toString();
+
     const transaction = await this.transactionService.update(
       user.userId,
       id,
       updateTransactionDto,
+      options,
     );
+
+    const newAccountId = transaction.account._id.toString();
+
     const settings = await this.settingsService.findByUserId(user.userId);
     const rates = await this.rateService.getLatestValidRate();
-    return this.transactionService.toTransactionDto(transaction, {
-      settings,
-      rates,
-    });
+
+    const newAccount = await this.accountService.findOne(
+      user.userId,
+      newAccountId,
+    );
+
+    const accounts = [this.accountService.toAccountDto(newAccount)];
+
+    if (oldAccountId && oldAccountId !== newAccountId) {
+      const oldAccount = await this.accountService.findOne(
+        user.userId,
+        oldAccountId,
+      );
+      accounts.push(this.accountService.toAccountDto(oldAccount));
+    }
+
+    const summary = await this.accountService.getSummary(user.userId);
+
+    return {
+      summary,
+      accounts,
+      transaction: this.transactionService.toTransactionDto(transaction, {
+        settings,
+        rates,
+      }),
+    };
   }
 
   @Delete(':id')

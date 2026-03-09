@@ -283,9 +283,13 @@ export class AccountService {
   }
 
   toAccountDto(
-    account: AccountDocument,
+    account: AccountDocument | null,
     conversionContext?: { rates: Rate[]; targetCurrency: CurrencyDocument },
   ): AccountDto {
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+
     const original = {
       value: this.moneyService.fromMinorUnits(account.balance, account.scale),
       raw: account.balance,
