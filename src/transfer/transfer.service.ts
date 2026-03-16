@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import {
   BadRequestException,
   Injectable,
@@ -85,7 +86,7 @@ export class TransferService {
     from: TransferSideInput,
     to: TransferSideInput,
     session?: ClientSession,
-  ): Promise<void> {
+  ): Promise<[AccountDocument, AccountDocument]> {
     if (from.account === to.account) {
       throw new BadRequestException(
         this.i18n.t('transfer.errors.sameAccount', {
@@ -107,21 +108,29 @@ export class TransferService {
       );
     }
 
-    if (fromAccount.scale !== from.scale) {
-      throw new BadRequestException(
-        this.i18n.t('transfer.errors.fromScaleMismatch', {
-          defaultValue: 'From scale must match source account scale',
-        }),
-      );
+    return [fromAccount, toAccount];
+  }
+
+  private normalizeScale(
+    value: number,
+    fromScale: number,
+    toScale: number,
+  ): number {
+    const diff = toScale - fromScale;
+
+    const decimalValue = new Decimal(value);
+
+    if (diff === 0) {
+      return decimalValue.toNumber();
     }
 
-    if (toAccount.scale !== to.scale) {
-      throw new BadRequestException(
-        this.i18n.t('transfer.errors.toScaleMismatch', {
-          defaultValue: 'To scale must match destination account scale',
-        }),
-      );
+    const factor = new Decimal(10).pow(Math.abs(diff));
+
+    if (diff > 0) {
+      return decimalValue.mul(factor).toNumber();
     }
+
+    return decimalValue.div(factor).floor().toNumber();
   }
 
   private toTransferSideInput(
@@ -167,16 +176,16 @@ export class TransferService {
       createTransferDto.rate,
     );
 
-    await this.validateTransferAccounts(
-      userId,
-      createTransferDto.from,
-      createTransferDto.to,
-    );
-
     const session = await this.connection.startSession();
 
     try {
       const created = await session.withTransaction(async () => {
+        const [fromAccount, toAccount] = await this.validateTransferAccounts(
+          userId,
+          createTransferDto.from,
+          createTransferDto.to,
+        );
+
         const transfer = new this.transferModel({
           user: this.getUserObjectId(userId),
           from: this.toTransferPersistenceData(createTransferDto.from),
@@ -187,16 +196,28 @@ export class TransferService {
 
         await transfer.save({ session });
 
+        const normalizedFromValue = this.normalizeScale(
+          createTransferDto.from.value,
+          createTransferDto.from.scale,
+          fromAccount.scale,
+        );
+
         await this.accountModel
           .updateOne(
             {
               _id: createTransferDto.from.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: -createTransferDto.from.value } },
+            { $inc: { balance: -normalizedFromValue } },
             { session },
           )
           .exec();
+
+        const normalizedToValue = this.normalizeScale(
+          createTransferDto.to.value,
+          createTransferDto.to.scale,
+          toAccount.scale,
+        );
 
         await this.accountModel
           .updateOne(
@@ -204,7 +225,7 @@ export class TransferService {
               _id: createTransferDto.to.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: createTransferDto.to.value } },
+            { $inc: { balance: normalizedToValue } },
             { session },
           )
           .exec();
@@ -310,16 +331,50 @@ export class TransferService {
               };
 
         this.ensurePositiveValues(nextFrom.value, nextTo.value, nextRate);
-        await this.validateTransferAccounts(userId, nextFrom, nextTo, session);
+        const [nextFromAccount, nextToAccount] =
+          await this.validateTransferAccounts(
+            userId,
+            nextFrom,
+            nextTo,
+            session,
+          );
+
+        const [currentFromAccount, currentToAccount] =
+          await this.validateTransferAccounts(
+            userId,
+            {
+              account: current.from.account.toString(),
+              value: current.from.value,
+              scale: current.from.scale,
+            },
+            {
+              account: current.to.account.toString(),
+              value: current.to.value,
+              scale: current.to.scale,
+            },
+            session,
+          );
 
         // Roll back the effect of the previous transfer
+        const rollbackFrom = this.normalizeScale(
+          current.from.value,
+          current.from.scale,
+          currentFromAccount.scale,
+        );
+
+        const rollbackTo = this.normalizeScale(
+          current.to.value,
+          current.to.scale,
+          currentToAccount.scale,
+        );
+
         await this.accountModel
           .updateOne(
             {
               _id: current.from.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: current.from.value } },
+            { $inc: { balance: rollbackFrom } },
             { session },
           )
           .exec();
@@ -330,19 +385,31 @@ export class TransferService {
               _id: current.to.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: -current.to.value } },
+            { $inc: { balance: -rollbackTo } },
             { session },
           )
           .exec();
 
         // Apply the new transfer values
+        const normalizedNextFrom = this.normalizeScale(
+          nextFrom.value,
+          nextFrom.scale,
+          nextFromAccount.scale,
+        );
+
+        const normalizedNextTo = this.normalizeScale(
+          nextTo.value,
+          nextTo.scale,
+          nextToAccount.scale,
+        );
+
         await this.accountModel
           .updateOne(
             {
               _id: nextFrom.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: -nextFrom.value } },
+            { $inc: { balance: -normalizedNextFrom } },
             { session },
           )
           .exec();
@@ -353,7 +420,7 @@ export class TransferService {
               _id: nextTo.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: nextTo.value } },
+            { $inc: { balance: normalizedNextTo } },
             { session },
           )
           .exec();
@@ -412,13 +479,40 @@ export class TransferService {
           );
         }
 
+        const [fromAccount, toAccount] = await this.validateTransferAccounts(
+          userId,
+          {
+            account: deleted.from.account.toString(),
+            value: deleted.from.value,
+            scale: deleted.from.scale,
+          },
+          {
+            account: deleted.to.account.toString(),
+            value: deleted.to.value,
+            scale: deleted.to.scale,
+          },
+          session,
+        );
+
+        const rollbackFrom = this.normalizeScale(
+          deleted.from.value,
+          deleted.from.scale,
+          fromAccount.scale,
+        );
+
+        const rollbackTo = this.normalizeScale(
+          deleted.to.value,
+          deleted.to.scale,
+          toAccount.scale,
+        );
+
         await this.accountModel
           .updateOne(
             {
               _id: deleted.from.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: deleted.from.value } },
+            { $inc: { balance: rollbackFrom } },
             { session },
           )
           .exec();
@@ -429,7 +523,7 @@ export class TransferService {
               _id: deleted.to.account,
               user: this.getUserObjectId(userId),
             },
-            { $inc: { balance: -deleted.to.value } },
+            { $inc: { balance: -rollbackTo } },
             { session },
           )
           .exec();

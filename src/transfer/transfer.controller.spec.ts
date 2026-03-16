@@ -132,7 +132,7 @@ describe('TransferController', () => {
 
       const result = await controller.findAll(mockUser);
 
-      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId);
+      expect(service.findAll).toHaveBeenCalledWith(mockUser.userId, undefined);
       expect(service.toTransferDto).toHaveBeenCalledWith(mockTransfer);
       expect(result).toEqual([mockTransferDto]);
     });

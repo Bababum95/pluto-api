@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
 import Decimal from 'decimal.js';
+import { Injectable } from '@nestjs/common';
 
 import type { Rate } from '../rate/rate.schema';
 import type { CurrencyDocument } from '../currency/currency.schema';
