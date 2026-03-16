@@ -12,6 +12,7 @@ import { Account, type AccountDocument } from '../account/account.schema';
 import {
   CreateTransferDto,
   TransferDto,
+  TransferFilterDto,
   type FeeDto,
   type TransferSideDto,
   UpdateTransferDto,
@@ -230,11 +231,31 @@ export class TransferService {
     }
   }
 
-  async findAll(userId: string): Promise<TransferDocument[]> {
-    return this.transferModel
-      .find({ user: this.getUserObjectId(userId) })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findAll(
+    userId: string,
+    filters?: TransferFilterDto,
+  ): Promise<TransferDocument[]> {
+    const query: Record<string, unknown> = {
+      user: new Types.ObjectId(userId),
+    };
+
+    if (filters?.createdFrom || filters?.createdTo) {
+      const dateFilter: Record<string, Date> = {};
+
+      if (filters.createdFrom) {
+        dateFilter.$gte = new Date(filters.createdFrom);
+      }
+
+      if (filters.createdTo) {
+        const end = new Date(filters.createdTo);
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+
+      query.createdAt = dateFilter;
+    }
+
+    return this.transferModel.find(query).sort({ createdAt: -1 }).exec();
   }
 
   async findOne(userId: string, id: string): Promise<TransferDocument | null> {

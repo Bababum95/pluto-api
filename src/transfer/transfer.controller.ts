@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,6 +25,7 @@ import {
   CreateTransferDto,
   TransferDto,
   UpdateTransferDto,
+  TransferFilterDto,
 } from './transfer.dto';
 import { TransferService } from './transfer.service';
 
@@ -60,8 +62,11 @@ export class TransferController {
     description: 'List of all transfers for the current user.',
     type: [TransferDto],
   })
-  async findAll(@UserDecorator() user: RequestUser): Promise<TransferDto[]> {
-    const transfers = await this.transferService.findAll(user.userId);
+  async findAll(
+    @UserDecorator() user: RequestUser,
+    @Query() filters?: TransferFilterDto,
+  ): Promise<TransferDto[]> {
+    const transfers = await this.transferService.findAll(user.userId, filters);
     return transfers.map((transfer) =>
       this.transferService.toTransferDto(transfer),
     );

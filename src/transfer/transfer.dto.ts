@@ -8,8 +8,9 @@ import {
   Max,
   Min,
   ValidateNested,
+  IsDateString,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PartialType } from '@nestjs/mapped-types';
 
 export class FeeDto {
@@ -63,6 +64,27 @@ export class TransferSideDto {
   @Min(0)
   @Max(18)
   scale: number;
+}
+
+/** Optional query filters for listing transfer. Any combination is allowed. */
+export class TransferFilterDto {
+  @ApiPropertyOptional({
+    example: '2024-01-01',
+    description:
+      'Start of period by transfer date (inclusive). ISO date or datetime.',
+  })
+  @IsOptional()
+  @IsDateString()
+  createdFrom?: string;
+
+  @ApiPropertyOptional({
+    example: '2024-01-31',
+    description:
+      'End of period by transfer date (inclusive). ISO date or datetime.',
+  })
+  @IsOptional()
+  @IsDateString()
+  createdTo?: string;
 }
 
 export class CreateTransferDto {

@@ -16,6 +16,7 @@ import { AccountModule } from './account/account.module';
 import { SettingsModule } from './settings/settings.module';
 import { TagModule } from './tag/tag.module';
 import { TransactionModule } from './transaction/transaction.module';
+import { RegularPaymentModule } from './regular-payment/regular-payment.module';
 import { TransferModule } from './transfer/transfer.module';
 import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
 
@@ -47,6 +48,7 @@ import { JwtAuthGlobalGuard } from './auth/jwt-auth.global.guard';
     SettingsModule,
     TagModule,
     TransactionModule,
+    RegularPaymentModule,
     TransferModule,
   ],
   controllers: [AppController],

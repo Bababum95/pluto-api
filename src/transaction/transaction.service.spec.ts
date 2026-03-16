@@ -295,6 +295,7 @@ describe('TransactionService', () => {
         amount: -1500.5,
         scale: 2,
         tags: [tagId.toString()],
+        date: '2024-01-15',
       };
 
       const result = await service.create(userId, createDto);
@@ -320,6 +321,7 @@ describe('TransactionService', () => {
         account: accountId.toString(),
         amount: -1500.5,
         scale: 2,
+        date: '2024-01-15',
       };
 
       await expect(service.create(userId, createDto)).rejects.toThrow(
@@ -339,6 +341,7 @@ describe('TransactionService', () => {
         account: accountId.toString(),
         amount: -1500.5,
         scale: 2,
+        date: '2024-01-15',
       };
 
       await expect(service.create(userId, createDto)).rejects.toThrow(
@@ -396,6 +399,9 @@ describe('TransactionService', () => {
         ...mockTransactionPopulated,
         comment: 'Updated comment',
       };
+      mockTransactionModel.findOne.mockReturnValue(
+        createChain(mockTransaction),
+      );
       mockTransactionModel.findOneAndUpdate.mockReturnValue(
         createChain(updated),
       );
@@ -409,13 +415,17 @@ describe('TransactionService', () => {
         updateDto,
       );
 
+      expect(mockTransactionModel.findOne).toHaveBeenCalledWith({
+        _id: transactionId.toString(),
+        user: new Types.ObjectId(userId),
+      });
       expect(mockTransactionModel.findOneAndUpdate).toHaveBeenCalledWith(
         {
           _id: transactionId.toString(),
           user: new Types.ObjectId(userId),
         },
         expect.objectContaining({ comment: 'Updated comment' }),
-        { new: true },
+        expect.objectContaining({ new: true }),
       );
       expect(result).toEqual(expectedPopulated);
     });

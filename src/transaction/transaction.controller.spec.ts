@@ -152,6 +152,7 @@ describe('TransactionController', () => {
     amount: -1500.5,
     scale: 2,
     tags: ['507f1f77bcf86cd799439015'],
+    date: '2024-01-15',
   };
 
   beforeEach(async () => {
@@ -201,8 +202,12 @@ describe('TransactionController', () => {
 
   describe('create', () => {
     it('should create a transaction and return transaction, account, and summary', async () => {
+      const mockTransactionCreated = {
+        ...mockTransaction,
+        account: { _id: mockTransaction.account },
+      };
       const mockAccount = { _id: mockTransaction.account, balance: 100050 };
-      service.create.mockResolvedValue(mockTransaction);
+      service.create.mockResolvedValue(mockTransactionCreated);
       service.toTransactionDto.mockReturnValue(mockTransactionDto);
       accountService.findOne.mockResolvedValue(mockAccount);
       accountService.getSummary.mockResolvedValue(mockSummaryDto);
@@ -214,10 +219,13 @@ describe('TransactionController', () => {
         mockUser.userId,
         mockCreateDto,
       );
-      expect(service.toTransactionDto).toHaveBeenCalledWith(mockTransaction, {
-        settings: null,
-        rates: [],
-      });
+      expect(service.toTransactionDto).toHaveBeenCalledWith(
+        mockTransactionCreated,
+        {
+          settings: null,
+          rates: [],
+        },
+      );
       expect(accountService.findOne).toHaveBeenCalledWith(
         mockUser.userId,
         mockCreateDto.account,
@@ -226,7 +234,7 @@ describe('TransactionController', () => {
       expect(accountService.toAccountDto).toHaveBeenCalledWith(mockAccount);
       expect(result).toEqual({
         transaction: mockTransactionDto,
-        account: mockAccountDto,
+        accounts: [mockAccountDto],
         summary: mockSummaryDto,
       });
     });
@@ -280,10 +288,22 @@ describe('TransactionController', () => {
   describe('update', () => {
     it('should update a transaction and return TransactionDto', async () => {
       const updateDto: UpdateTransactionDto = { comment: 'Updated comment' };
-      const updated = { ...mockTransaction, comment: 'Updated comment' };
+      const updated = {
+        ...mockTransaction,
+        comment: 'Updated comment',
+        account: { _id: mockTransaction.account },
+      };
       const updatedDto = { ...mockTransactionDto, comment: 'Updated comment' };
+      const mockAccount = { _id: mockTransaction.account, balance: 100050 };
+      service.findOne.mockResolvedValue({
+        ...mockTransaction,
+        account: { _id: mockTransaction.account },
+      });
       service.update.mockResolvedValue(updated);
       service.toTransactionDto.mockReturnValue(updatedDto);
+      accountService.findOne.mockResolvedValue(mockAccount);
+      accountService.getSummary.mockResolvedValue(mockSummaryDto);
+      accountService.toAccountDto.mockReturnValue(mockAccountDto);
 
       const result = await controller.update(
         mockUser,
@@ -295,12 +315,17 @@ describe('TransactionController', () => {
         mockUser.userId,
         mockTransaction._id,
         updateDto,
+        undefined,
       );
       expect(service.toTransactionDto).toHaveBeenCalledWith(updated, {
         settings: null,
         rates: [],
       });
-      expect(result).toEqual(updatedDto);
+      expect(result).toEqual({
+        transaction: updatedDto,
+        accounts: [mockAccountDto],
+        summary: mockSummaryDto,
+      });
     });
   });
 
