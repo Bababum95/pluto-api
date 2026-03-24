@@ -197,6 +197,12 @@ export class TransactionService {
         .populate('tags')
         .populate({ path: 'account', populate: { path: 'currency' } })
         .exec();
+
+      if (populated?.tags && populated.tags.length > 0) {
+        populated.tags.forEach((tag) => {
+          void this.tagService.incrementUsageCount(userId, tag._id.toString());
+        });
+      }
       return (populated ?? created) as TransactionDocument;
     } finally {
       await session.endSession();

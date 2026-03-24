@@ -213,6 +213,7 @@ describe('TransactionService', () => {
         {
           provide: TagService,
           useValue: {
+            incrementUsageCount: jest.fn().mockResolvedValue(undefined),
             toTagDto: jest
               .fn()
               .mockImplementation(

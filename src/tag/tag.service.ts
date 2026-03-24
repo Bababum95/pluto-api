@@ -67,9 +67,43 @@ export class TagService {
   }
 
   async findAll(userId: string): Promise<TagDocument[]> {
+    const now = new Date();
+
     return this.tagModel
-      .find({ user: new Types.ObjectId(userId) })
-      .sort({ name: 1 })
+      .aggregate<TagDocument>([
+        { $match: { user: new Types.ObjectId(userId) } },
+        {
+          $addFields: {
+            score: {
+              $add: [
+                { $multiply: [{ $ifNull: ['$usageCount', 0] }, 0.7] },
+                {
+                  $divide: [
+                    1,
+                    {
+                      $add: [
+                        {
+                          $divide: [
+                            {
+                              $subtract: [
+                                now,
+                                { $ifNull: ['$lastUsedAt', new Date(0)] },
+                              ],
+                            },
+                            1000 * 60 * 60 * 24,
+                          ],
+                        },
+                        1,
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { $sort: { score: -1 } },
+      ])
       .exec();
   }
 
@@ -140,6 +174,16 @@ export class TagService {
     }
 
     return tag;
+  }
+
+  async incrementUsageCount(userId: string, id: string): Promise<void> {
+    await this.tagModel
+      .findOneAndUpdate(
+        { _id: id, user: new Types.ObjectId(userId) },
+        { $inc: { usageCount: 1 }, lastUsedAt: new Date() },
+        { new: true },
+      )
+      .exec();
   }
 
   async remove(userId: string, id: string): Promise<boolean> {

@@ -31,6 +31,12 @@ export class Tag {
   @Prop({ trim: true })
   icon: string;
 
+  @Prop({ default: 0 })
+  usageCount: number;
+
+  @Prop({ default: new Date() })
+  lastUsedAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }

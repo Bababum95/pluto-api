@@ -30,6 +30,7 @@ describe('TagService', () => {
   let mockTagModel: Model<unknown> & {
     findOne: jest.Mock;
     find: jest.Mock;
+    aggregate: jest.Mock;
     findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     findOneAndDelete: jest.Mock;
@@ -65,6 +66,7 @@ describe('TagService', () => {
     } as unknown as Model<unknown> & {
       findOne: jest.Mock;
       find: jest.Mock;
+      aggregate: jest.Mock;
       findById: jest.Mock;
       findOneAndUpdate: jest.Mock;
       findOneAndDelete: jest.Mock;
@@ -74,6 +76,7 @@ describe('TagService', () => {
 
     MockModel.findOne = jest.fn().mockReturnValue(chainNull);
     MockModel.find = jest.fn().mockReturnValue(createChain([]));
+    MockModel.aggregate = jest.fn().mockReturnValue(createChain([]));
     MockModel.findById = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndUpdate = jest.fn().mockReturnValue(chainNull);
     MockModel.findOneAndDelete = jest.fn().mockReturnValue(chainNull);
@@ -98,6 +101,7 @@ describe('TagService', () => {
 
     MockModel.findOne.mockReturnValue(createChain(null));
     MockModel.find.mockReturnValue(createChain([]));
+    MockModel.aggregate.mockReturnValue(createChain([]));
     MockModel.findById.mockReturnValue(createChain(null));
     MockModel.findOneAndUpdate.mockReturnValue(createChain(null));
     MockModel.findOneAndDelete.mockReturnValue(createChain(null));
@@ -161,13 +165,11 @@ describe('TagService', () => {
   describe('findAll', () => {
     it('should return an array of tags for the user', async () => {
       const list = [mockTag];
-      mockTagModel.find.mockReturnValue(createChain(list));
+      mockTagModel.aggregate.mockReturnValue(createChain(list));
 
       const result = await service.findAll(userId);
 
-      expect(mockTagModel.find).toHaveBeenCalledWith({
-        user: new Types.ObjectId(userId),
-      });
+      expect(mockTagModel.aggregate).toHaveBeenCalled();
       expect(result).toEqual(list);
     });
   });
@@ -285,6 +287,35 @@ describe('TagService', () => {
       await expect(service.remove(userId, 'invalid')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('incrementUsageCount', () => {
+    it('should increment usage count and update last used date', async () => {
+      mockTagModel.findOneAndUpdate.mockReturnValue(createChain(mockTag));
+
+      await service.incrementUsageCount(userId, tagId.toString());
+
+      expect(mockTagModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: tagId.toString(),
+          user: new Types.ObjectId(userId),
+        },
+        {
+          $inc: { usageCount: 1 },
+          lastUsedAt: expect.any(Date),
+        },
+        { new: true },
+      );
+    });
+
+    it('should resolve even when tag is not found', async () => {
+      mockTagModel.findOneAndUpdate.mockReturnValue(createChain(null));
+
+      await expect(
+        service.incrementUsageCount(userId, tagId.toString()),
+      ).resolves.toBeUndefined();
+      expect(mockTagModel.findOneAndUpdate).toHaveBeenCalled();
     });
   });
 
