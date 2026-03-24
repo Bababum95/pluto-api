@@ -7,6 +7,27 @@ The format follows Conventional Commits. Versions are listed in reverse chronolo
 
 ---
 
+## 24.03.2026 — v0.0.9
+
+### ✨ Features
+
+- add RegularPaymentModule and enhance transaction filtering
+- enhance Tag functionality with usage tracking
+
+### ♻️ Refactoring
+
+- improve transfer service and tests for account balance normalization
+
+---
+
+## 09.03.2026 — v0.0.8
+
+### ✨ Features
+
+- enhance transaction update functionality and response structure
+
+---
+
 ## 07.03.2026 — v0.0.7
 
 ### ✨ Features
