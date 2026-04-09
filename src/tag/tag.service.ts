@@ -76,7 +76,7 @@ export class TagService {
           $addFields: {
             score: {
               $add: [
-                { $multiply: [{ $ifNull: ['$usageCount', 0] }, 0.5] },
+                { $multiply: [{ $ifNull: ['$usageCount', 0] }, 0.3] },
                 {
                   $multiply: [
                     10,
