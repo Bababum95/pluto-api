@@ -78,22 +78,27 @@ export class TagService {
               $add: [
                 { $multiply: [{ $ifNull: ['$usageCount', 0] }, 0.5] },
                 {
-                  $divide: [
-                    1,
+                  $multiply: [
+                    10,
                     {
-                      $add: [
+                      $divide: [
+                        1,
                         {
-                          $divide: [
+                          $add: [
                             {
-                              $subtract: [
-                                now,
-                                { $ifNull: ['$lastUsedAt', new Date(0)] },
+                              $divide: [
+                                {
+                                  $subtract: [
+                                    now,
+                                    { $ifNull: ['$lastUsedAt', new Date(0)] },
+                                  ],
+                                },
+                                1000 * 60 * 60 * 24,
                               ],
                             },
-                            1000 * 60 * 60 * 24,
+                            1,
                           ],
                         },
-                        1,
                       ],
                     },
                   ],
