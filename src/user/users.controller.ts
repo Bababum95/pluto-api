@@ -7,17 +7,24 @@ import {
   Param,
   Delete,
   NotFoundException,
+  ForbiddenException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiOkResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { I18n, I18nContext } from 'nestjs-i18n';
 
+import { UserDecorator } from '../auth/user.decorator';
+import type { RequestUser } from '../auth/auth.dto';
+
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, UserDto } from './users.dto';
+import { ChangePasswordDto, CreateUserDto, UpdateUserDto, UserDto } from './users.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -103,6 +110,27 @@ export class UsersController {
   ): Promise<UserDto> {
     const user = await this.usersService.update(id, updateUserDto);
 
+    return this.usersService.toUserDto(user);
+  }
+
+  @Patch(':id/password')
+  @ApiOkResponse({ type: UserDto })
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change password for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully.' })
+  @ApiResponse({ status: 401, description: 'Current password is incorrect.' })
+  @ApiResponse({ status: 403, description: 'Forbidden.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async changePassword(
+    @Param('id') id: string,
+    @Body() dto: ChangePasswordDto,
+    @UserDecorator() requestUser: RequestUser,
+  ): Promise<UserDto> {
+    if (id !== requestUser.userId) {
+      throw new ForbiddenException();
+    }
+    const user = await this.usersService.changePassword(id, dto);
     return this.usersService.toUserDto(user);
   }
 

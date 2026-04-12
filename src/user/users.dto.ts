@@ -31,6 +31,19 @@ export class CreateUserDto {
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {}
 
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'currentSecret123' })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @ApiProperty({ example: 'newSecret456', minLength: 6 })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  newPassword: string;
+}
+
 export class UserDto {
   @ApiProperty()
   id: string;
