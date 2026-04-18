@@ -79,7 +79,7 @@ export class TagService {
                 { $multiply: [{ $ifNull: ['$usageCount', 0] }, 0.3] },
                 {
                   $multiply: [
-                    10,
+                    25,
                     {
                       $divide: [
                         1,
