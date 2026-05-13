@@ -9,7 +9,12 @@ import { Model } from 'mongoose';
 import { I18nService } from 'nestjs-i18n';
 
 import { User, UserDocument } from './user.schema';
-import { ChangePasswordDto, CreateUserDto, UpdateUserDto, UserDto } from './users.dto';
+import {
+  ChangePasswordDto,
+  CreateUserDto,
+  UpdateUserDto,
+  UserDto,
+} from './users.dto';
 
 @Injectable()
 export class UsersService {
@@ -91,10 +96,7 @@ export class UsersService {
     id: string,
     dto: ChangePasswordDto,
   ): Promise<UserDocument> {
-    const user = await this.userModel
-      .findById(id)
-      .select('+password')
-      .exec();
+    const user = await this.userModel.findById(id).select('+password').exec();
 
     if (!user) {
       throw new NotFoundException(this.i18n.t('user.errors.notFound'));

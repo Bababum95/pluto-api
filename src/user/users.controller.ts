@@ -24,7 +24,12 @@ import { UserDecorator } from '../auth/user.decorator';
 import type { RequestUser } from '../auth/auth.dto';
 
 import { UsersService } from './users.service';
-import { ChangePasswordDto, CreateUserDto, UpdateUserDto, UserDto } from './users.dto';
+import {
+  ChangePasswordDto,
+  CreateUserDto,
+  UpdateUserDto,
+  UserDto,
+} from './users.dto';
 
 @ApiTags('users')
 @Controller('users')

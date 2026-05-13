@@ -296,17 +296,24 @@ describe('TagService', () => {
 
       await service.incrementUsageCount(userId, tagId.toString());
 
-      expect(mockTagModel.findOneAndUpdate).toHaveBeenCalledWith(
-        {
-          _id: tagId.toString(),
-          user: new Types.ObjectId(userId),
-        },
-        {
-          $inc: { usageCount: 1 },
-          lastUsedAt: expect.any(Date),
-        },
-        { new: true },
-      );
+      type UsageIncrementCall = [
+        { _id: string; user: Types.ObjectId },
+        { $inc: { usageCount: number }; lastUsedAt: Date },
+        { new: boolean },
+      ];
+
+      const call = mockTagModel.findOneAndUpdate.mock.calls[0] as unknown as
+        | UsageIncrementCall
+        | undefined;
+
+      expect(call).toBeDefined();
+      expect(call![0]).toEqual({
+        _id: tagId.toString(),
+        user: new Types.ObjectId(userId),
+      });
+      expect(call![1].$inc).toEqual({ usageCount: 1 });
+      expect(call![1].lastUsedAt).toBeInstanceOf(Date);
+      expect(call![2]).toEqual({ new: true });
     });
 
     it('should resolve even when tag is not found', async () => {
