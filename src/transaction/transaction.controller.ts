@@ -50,15 +50,8 @@ export class TransactionController {
   @ApiResponse({
     status: 201,
     description:
-      'The transaction has been successfully created. Returns transaction, updated account, and total balance summary.',
-    schema: {
-      type: 'object',
-      properties: {
-        transaction: { $ref: '#/components/schemas/TransactionDto' },
-        account: { $ref: '#/components/schemas/AccountDto' },
-        summary: { $ref: '#/components/schemas/AccountSummaryDto' },
-      },
-    },
+      'The transaction has been successfully created. Returns transaction, updated accounts, and total balance summary.',
+    type: TransactionMutationResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -145,8 +138,9 @@ export class TransactionController {
   @ApiOperation({ summary: 'Update a transaction by ID' })
   @ApiResponse({
     status: 200,
-    description: 'The transaction has been successfully updated.',
-    type: TransactionDto,
+    description:
+      'The transaction has been successfully updated. Returns transaction, updated accounts, and total balance summary.',
+    type: TransactionMutationResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Transaction not found.' })
   @ApiResponse({ status: 400, description: 'Category or account not found.' })

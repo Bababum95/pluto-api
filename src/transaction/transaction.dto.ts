@@ -202,8 +202,17 @@ export class TransactionDto {
   updatedAt: string;
 }
 
-export type TransactionMutationResponseDto = {
+export class TransactionMutationResponseDto {
+  @ApiProperty({ type: TransactionDto })
   transaction: TransactionDto;
+
+  @ApiProperty({
+    type: [AccountDto],
+    description:
+      'Accounts whose balances changed (one or two when the transaction account was changed)',
+  })
   accounts: AccountDto[];
+
+  @ApiProperty({ type: AccountSummaryDto })
   summary: AccountSummaryDto;
-};
+}
