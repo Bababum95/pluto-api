@@ -93,6 +93,7 @@ describe('AccountService', () => {
     exists: jest.Mock;
   };
   let saveMock: jest.Mock;
+  let lastCreatedAccountData: Record<string, unknown> | undefined;
 
   const userId = '507f1f77bcf86cd799439011';
   const accountId = new Types.ObjectId('507f1f77bcf86cd799439012');
@@ -112,7 +113,9 @@ describe('AccountService', () => {
 
   beforeEach(async () => {
     saveMock = jest.fn().mockResolvedValue(undefined);
-    const MockModel = function (this: unknown, dto?: CreateAccountDto) {
+    lastCreatedAccountData = undefined;
+    const MockModel = function (this: unknown, dto?: Record<string, unknown>) {
+      lastCreatedAccountData = dto;
       const instance = {
         _id: mockAccount._id,
         user: new Types.ObjectId(userId),
@@ -242,6 +245,28 @@ describe('AccountService', () => {
       expect(saveMock).toHaveBeenCalled();
       expect(mockAccountModel.findById).toHaveBeenCalledWith(accountId);
       expect(result).toEqual(mockAccount);
+    });
+
+    it('should store balance in integer minor units', async () => {
+      const currencyId = mockCurrency._id.toString();
+      const createDto: CreateAccountDto = {
+        color: '#FF5733',
+        icon: 'wallet',
+        name: 'Main Wallet',
+        balance: 19.99,
+        scale: 2,
+        currency: currencyId,
+      };
+      mockCurrencyModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockCurrency),
+      });
+      mockAccountModel.findOne.mockReturnValue(createChain(null));
+      mockAccountModel.findById.mockReturnValue(createChain(mockAccount));
+
+      await service.create(userId, createDto);
+
+      expect(lastCreatedAccountData?.balance).toBe(1999);
+      expect(Number.isInteger(lastCreatedAccountData?.balance)).toBe(true);
     });
 
     it('should create an account with default balance when balance is not provided', async () => {
@@ -410,7 +435,7 @@ describe('AccountService', () => {
 
     it('should update balance when balance and scale provided', async () => {
       const updateDto: UpdateAccountDto = { balance: 2000.75, scale: 2 };
-      const updated = { ...mockAccount, balance: 2000.75, scale: 2 };
+      const updated = { ...mockAccount, balance: 200075, scale: 2 };
       mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
       mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
 
@@ -425,7 +450,7 @@ describe('AccountService', () => {
           _id: accountId.toString(),
           user: new Types.ObjectId(userId),
         },
-        { balance: 2000.75, scale: 2 },
+        { balance: 200075, scale: 2 },
         { new: true },
       );
       expect(result).toEqual(updated);
@@ -433,7 +458,7 @@ describe('AccountService', () => {
 
     it('should update balance when only balance provided', async () => {
       const updateDto: UpdateAccountDto = { balance: 2000.75 };
-      const updated = { ...mockAccount, balance: 2000.75 };
+      const updated = { ...mockAccount, balance: 200075 };
       mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
       mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
 
@@ -448,10 +473,28 @@ describe('AccountService', () => {
           _id: accountId.toString(),
           user: new Types.ObjectId(userId),
         },
-        { balance: 2000.75 },
+        { balance: 200075 },
         { new: true },
       );
       expect(result).toEqual(updated);
+    });
+
+    it('should convert float-prone decimals to exact minor units', async () => {
+      const updateDto: UpdateAccountDto = { balance: 19.99 };
+      const updated = { ...mockAccount, balance: 1999 };
+      mockAccountModel.findOne.mockReturnValue(createChain(mockAccount));
+      mockAccountModel.findOneAndUpdate.mockReturnValue(createChain(updated));
+
+      await service.update(userId, accountId.toString(), updateDto);
+
+      expect(mockAccountModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: accountId.toString(),
+          user: new Types.ObjectId(userId),
+        },
+        { balance: 1999 },
+        { new: true },
+      );
     });
 
     it('should throw NotFoundException when account not found', async () => {

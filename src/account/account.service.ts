@@ -76,6 +76,14 @@ export class AccountService {
         ? createAccountDto.order
         : (maxOrderAccount?.order ?? -1) + 1;
 
+    const balanceMinor =
+      createAccountDto.balance !== undefined
+        ? this.moneyService.toMinorUnits(
+            createAccountDto.balance,
+            createAccountDto.scale,
+          )
+        : 0;
+
     const account = new this.accountModel({
       color: createAccountDto.color,
       icon: createAccountDto.icon,
@@ -84,7 +92,7 @@ export class AccountService {
       currency: new Types.ObjectId(createAccountDto.currency),
       scale: createAccountDto.scale,
       user: new Types.ObjectId(userId),
-      balance: createAccountDto.balance,
+      balance: balanceMinor,
       order,
     });
 
@@ -191,7 +199,14 @@ export class AccountService {
       updateData.order = updateAccountDto.order;
     }
     if (updateAccountDto.balance !== undefined) {
-      updateData.balance = updateAccountDto.balance;
+      const scale =
+        updateAccountDto.scale !== undefined
+          ? updateAccountDto.scale
+          : existingAccount.scale;
+      updateData.balance = this.moneyService.toMinorUnits(
+        updateAccountDto.balance,
+        scale,
+      );
     }
     if (updateAccountDto.excluded !== undefined) {
       updateData.excluded = updateAccountDto.excluded;

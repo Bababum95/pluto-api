@@ -12,7 +12,7 @@ export class MoneyService {
    * Convert minor units to decimal amount (e.g. 150050 with scale 2 -> 1500.50).
    */
   fromMinorUnits(amountRaw: number, scale: number): number {
-    return new Decimal(amountRaw).div(new Decimal(10).pow(scale)).toNumber();
+    return this.fromMinorUnitsDecimal(amountRaw, scale).toNumber();
   }
 
   /**
@@ -20,6 +20,23 @@ export class MoneyService {
    */
   fromMinorUnitsDecimal(amountRaw: number, scale: number): Decimal {
     return new Decimal(amountRaw).div(new Decimal(10).pow(scale));
+  }
+
+  /**
+   * Convert a decimal amount to integer minor units (e.g. 1500.50 with scale 2 -> 150050).
+   * Uses ROUND_HALF_UP to avoid IEEE-754 float drift on values like 19.99.
+   */
+  toMinorUnits(
+    amountDecimal: number | string | Decimal,
+    scale: number,
+  ): number {
+    const amount = new Decimal(amountDecimal);
+    const factor = new Decimal(10).pow(scale);
+
+    return amount
+      .mul(factor)
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+      .toNumber();
   }
 
   /**
@@ -79,7 +96,7 @@ export class MoneyService {
     scale: number,
   ): { rounded: Decimal; rawMinor: number } {
     const rounded = amount.toDecimalPlaces(scale, Decimal.ROUND_HALF_UP);
-    const rawMinor = rounded.mul(new Decimal(10).pow(scale)).toNumber();
+    const rawMinor = this.toMinorUnits(rounded, scale);
 
     return { rounded, rawMinor };
   }

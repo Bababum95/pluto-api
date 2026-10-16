@@ -118,15 +118,25 @@ describe('TransactionService', () => {
     tags: [mockTagDoc],
   } as unknown as TransactionDocumentPopulated;
 
+  let lastCreatedTransactionData: Record<string, unknown> | undefined;
+
   beforeEach(async () => {
     saveMock = jest.fn().mockResolvedValue(undefined);
+    lastCreatedTransactionData = undefined;
     const chainNull = createChain(null);
-    function MockTransactionModel(this: {
-      _id: Types.ObjectId;
-      save: jest.Mock;
-    }) {
+    function MockTransactionModel(
+      this: {
+        _id: Types.ObjectId;
+        save: jest.Mock;
+      },
+      dto?: Record<string, unknown>,
+    ) {
+      lastCreatedTransactionData = dto;
       this._id = transactionId;
       this.save = saveMock;
+      if (dto) {
+        Object.assign(this, dto);
+      }
     }
     const MockTransactionModelStatics = {
       findOne: jest.fn().mockReturnValue(chainNull),
@@ -310,7 +320,38 @@ describe('TransactionService', () => {
         user: new Types.ObjectId(userId),
       });
       expect(saveMock).toHaveBeenCalled();
+      expect(lastCreatedTransactionData?.amount).toBe(-150050);
+      expect(mockAccountModel.updateOne).toHaveBeenCalledWith(
+        {
+          _id: accountId.toString(),
+          user: new Types.ObjectId(userId),
+        },
+        { $inc: { balance: -150050 } },
+        expect.objectContaining({ session: expect.any(Object) as object }),
+      );
       expect(result).toEqual(mockTransactionPopulated);
+    });
+
+    it('should convert float-prone decimal amounts to exact minor units', async () => {
+      const createDto: CreateTransactionDto = {
+        type: TransactionType.EXPENSE,
+        category: categoryId.toString(),
+        account: accountId.toString(),
+        amount: -19.99,
+        scale: 2,
+        date: '2024-01-15',
+      };
+
+      await service.create(userId, createDto);
+
+      expect(lastCreatedTransactionData?.amount).toBe(-1999);
+      expect(mockAccountModel.updateOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _id: accountId.toString(),
+        }),
+        { $inc: { balance: -1999 } },
+        expect.objectContaining({ session: expect.any(Object) as object }),
+      );
     });
 
     it('should throw BadRequestException when category not found', async () => {

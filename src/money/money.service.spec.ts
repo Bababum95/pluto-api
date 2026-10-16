@@ -23,6 +23,25 @@ describe('MoneyService', () => {
     expect(result.equals(new Decimal(1500.5))).toBe(true);
   });
 
+  it('should convert decimal amount to integer minor units', () => {
+    expect(service.toMinorUnits(1500.5, 2)).toBe(150050);
+    expect(service.toMinorUnits(-1500.5, 2)).toBe(-150050);
+    expect(service.toMinorUnits(0, 2)).toBe(0);
+  });
+
+  it('should avoid float drift when converting common decimal amounts', () => {
+    // Classic IEEE-754 traps: 19.99 * 100 === 1998.999... in plain JS
+    expect(service.toMinorUnits(19.99, 2)).toBe(1999);
+    expect(service.toMinorUnits(0.29, 2)).toBe(29);
+    expect(service.toMinorUnits(1.15, 2)).toBe(115);
+    expect(service.toMinorUnits(1234567.89, 2)).toBe(123456789);
+  });
+
+  it('should round half-up when converting to minor units', () => {
+    expect(service.toMinorUnits('1500.505', 2)).toBe(150051);
+    expect(service.toMinorUnits('1.005', 2)).toBe(101);
+  });
+
   it('should convert to USD when source is not USD', () => {
     const amount = new Decimal(1000);
     const rates: Rate[] = [{ code: 'EUR', value: 0.8 } as Rate];

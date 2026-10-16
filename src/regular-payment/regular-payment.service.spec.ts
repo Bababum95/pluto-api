@@ -194,6 +194,14 @@ describe('RegularPaymentService', () => {
             fromMinorUnits: jest.fn(
               (raw: number, scale: number) => raw / Math.pow(10, scale),
             ),
+            fromMinorUnitsDecimal: jest.fn((raw: number, scale: number) => ({
+              toNumber: () => raw / Math.pow(10, scale),
+            })),
+            toMinorUnits: jest.fn(
+              (amount: number, scale: number) =>
+                Math.round(Math.abs(amount) * Math.pow(10, scale)) *
+                Math.sign(amount || 1),
+            ),
             convertAmount: jest.fn((_, __, ___, targetCurrency) =>
               targetCurrency
                 ? { value: -1500.5, raw: -150050, scale: 2, currency: {} }
@@ -349,6 +357,9 @@ describe('RegularPaymentService', () => {
 
     it('should update a regular payment and return it', async () => {
       const updated = { ...mockRegularPayment, comment: 'Updated rent' };
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
+      );
       mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
         createChain(updated),
       );
@@ -370,10 +381,31 @@ describe('RegularPaymentService', () => {
       expect(result).toEqual(updated);
     });
 
-    it('should throw NotFoundException when regular payment not found', async () => {
-      mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
-        createChain(null),
+    it('should convert decimal amount to minor units on update', async () => {
+      const updated = { ...mockRegularPayment, amount: -1999 };
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
       );
+      mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
+        createChain(updated),
+      );
+
+      await service.update(userId, paymentId.toString(), {
+        amount: -19.99,
+      });
+
+      expect(mockRegularPaymentModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: paymentId.toString(),
+          user: new Types.ObjectId(userId),
+        },
+        { amount: -1999 },
+        { new: true },
+      );
+    });
+
+    it('should throw NotFoundException when regular payment not found', async () => {
+      mockRegularPaymentModel.findOne.mockReturnValue(createChain(null));
 
       await expect(
         service.update(userId, 'invalid-id', updateDto),
