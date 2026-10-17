@@ -2,7 +2,7 @@ import { NotFoundException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { Category, CategoryDocument } from './category.schema';
 import { CategoryService } from './category.service';
@@ -29,7 +29,7 @@ const createChain = (resolvedValue: unknown) => ({
 
 describe('CategoryService', () => {
   let service: CategoryService;
-  let mockCategoryModel: Model<unknown> & {
+  let mockCategoryModel: {
     findOne: jest.Mock;
     find: jest.Mock;
     findById: jest.Mock;
@@ -65,7 +65,7 @@ describe('CategoryService', () => {
         return this;
       }
       return instance;
-    } as unknown as Model<unknown> & {
+    } as unknown as {
       findOne: jest.Mock;
       find: jest.Mock;
       findById: jest.Mock;

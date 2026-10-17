@@ -2,7 +2,7 @@ import { NotFoundException, ConflictException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { Tag, TagDocument } from './tag.schema';
 import { TagService } from './tag.service';
@@ -27,7 +27,7 @@ const createChain = (resolvedValue: unknown) => ({
 
 describe('TagService', () => {
   let service: TagService;
-  let mockTagModel: Model<unknown> & {
+  let mockTagModel: {
     findOne: jest.Mock;
     find: jest.Mock;
     aggregate: jest.Mock;
@@ -63,7 +63,7 @@ describe('TagService', () => {
         return this;
       }
       return instance;
-    } as unknown as Model<unknown> & {
+    } as unknown as {
       findOne: jest.Mock;
       find: jest.Mock;
       aggregate: jest.Mock;
@@ -303,8 +303,7 @@ describe('TagService', () => {
       ];
 
       const call = mockTagModel.findOneAndUpdate.mock.calls[0] as unknown as
-        | UsageIncrementCall
-        | undefined;
+        UsageIncrementCall | undefined;
 
       expect(call).toBeDefined();
       expect(call![0]).toEqual({

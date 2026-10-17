@@ -246,7 +246,7 @@ export class TransferService {
         return result;
       });
 
-      return created as TransferDocument;
+      return created;
     } finally {
       await session.endSession();
     }
@@ -452,7 +452,7 @@ export class TransferService {
         return result;
       });
 
-      return updated as TransferDocument;
+      return updated;
     } finally {
       await session.endSession();
     }

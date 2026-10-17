@@ -203,7 +203,7 @@ export class TransactionService {
           void this.tagService.incrementUsageCount(userId, tag._id.toString());
         });
       }
-      return (populated ?? created) as TransactionDocument;
+      return populated ?? created;
     } finally {
       await session.endSession();
     }
@@ -413,7 +413,7 @@ export class TransactionService {
         .populate({ path: 'account', populate: { path: 'currency' } })
         .exec();
 
-      return (populated ?? result) as TransactionDocument;
+      return populated ?? result;
     } finally {
       await session.endSession();
     }
