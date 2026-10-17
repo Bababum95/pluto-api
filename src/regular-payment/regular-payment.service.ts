@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -221,69 +222,93 @@ export class RegularPaymentService {
       await this.validateTagsBelongToUser(userId, dto.tags);
     }
 
-    const existing = await this.regularPaymentModel
-      .findOne({ _id: id, user: new Types.ObjectId(userId) })
-      .exec();
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const existing = await this.regularPaymentModel
+        .findOne({ _id: id, user: new Types.ObjectId(userId) })
+        .exec();
 
-    if (!existing) {
-      throw new NotFoundException(
-        this.i18n.t('regularPayment.errors.notFound', {
-          defaultValue: 'Regular payment not found',
-        }),
-      );
+      if (!existing) {
+        throw new NotFoundException(
+          this.i18n.t('regularPayment.errors.notFound', {
+            defaultValue: 'Regular payment not found',
+          }),
+        );
+      }
+
+      const updateData: Record<string, unknown> = {};
+      if (dto.type !== undefined) updateData.type = dto.type;
+      if (dto.category !== undefined) {
+        updateData.category = new Types.ObjectId(dto.category);
+      }
+      if (dto.comment !== undefined) updateData.comment = dto.comment.trim();
+      if (dto.account !== undefined) {
+        updateData.account = new Types.ObjectId(dto.account);
+      }
+      if (dto.scale !== undefined) updateData.scale = dto.scale;
+
+      const nextType = dto.type ?? existing.type;
+      const nextScale = dto.scale ?? existing.scale;
+      const derivesAmountFromExisting =
+        dto.amount === undefined &&
+        (dto.type !== undefined || dto.scale !== undefined);
+
+      if (dto.amount !== undefined || derivesAmountFromExisting) {
+        updateData.amount =
+          dto.amount !== undefined
+            ? this.toSignedMinorUnits(dto.amount, nextScale, nextType)
+            : this.toSignedMinorUnits(
+                this.moneyService.fromMinorUnits(
+                  existing.amount,
+                  existing.scale,
+                ),
+                nextScale,
+                nextType,
+              );
+      }
+
+      if (dto.tags !== undefined) {
+        updateData.tags = dto.tags.map((tagId) => new Types.ObjectId(tagId));
+      }
+
+      // Optimistic lock: when amount is derived from a prior read, require the
+      // source fields to be unchanged so concurrent PATCHes cannot clobber it.
+      const filter: Record<string, unknown> = {
+        _id: id,
+        user: new Types.ObjectId(userId),
+      };
+      if (derivesAmountFromExisting) {
+        filter.amount = existing.amount;
+        filter.scale = existing.scale;
+        filter.type = existing.type;
+      }
+
+      const updated = await this.regularPaymentModel
+        .findOneAndUpdate(filter, updateData, { new: true })
+        .populate('category')
+        .populate('tags')
+        .populate({ path: 'account', populate: { path: 'currency' } })
+        .exec();
+
+      if (updated) {
+        return updated;
+      }
+
+      if (!derivesAmountFromExisting) {
+        throw new NotFoundException(
+          this.i18n.t('regularPayment.errors.notFound', {
+            defaultValue: 'Regular payment not found',
+          }),
+        );
+      }
+      // Concurrent modification of amount/scale/type — re-read and retry.
     }
 
-    const updateData: Record<string, unknown> = {};
-    if (dto.type !== undefined) updateData.type = dto.type;
-    if (dto.category !== undefined) {
-      updateData.category = new Types.ObjectId(dto.category);
-    }
-    if (dto.comment !== undefined) updateData.comment = dto.comment.trim();
-    if (dto.account !== undefined) {
-      updateData.account = new Types.ObjectId(dto.account);
-    }
-    if (dto.scale !== undefined) updateData.scale = dto.scale;
-
-    const nextType = dto.type ?? existing.type;
-    const nextScale = dto.scale ?? existing.scale;
-    if (
-      dto.amount !== undefined ||
-      dto.type !== undefined ||
-      dto.scale !== undefined
-    ) {
-      updateData.amount =
-        dto.amount !== undefined
-          ? this.toSignedMinorUnits(dto.amount, nextScale, nextType)
-          : this.toSignedMinorUnits(
-              this.moneyService.fromMinorUnits(existing.amount, existing.scale),
-              nextScale,
-              nextType,
-            );
-    }
-
-    if (dto.tags !== undefined) {
-      updateData.tags = dto.tags.map((id) => new Types.ObjectId(id));
-    }
-
-    const updated = await this.regularPaymentModel
-      .findOneAndUpdate(
-        { _id: id, user: new Types.ObjectId(userId) },
-        updateData,
-        { new: true },
-      )
-      .populate('category')
-      .populate('tags')
-      .populate({ path: 'account', populate: { path: 'currency' } })
-      .exec();
-
-    if (!updated) {
-      throw new NotFoundException(
-        this.i18n.t('regularPayment.errors.notFound', {
-          defaultValue: 'Regular payment not found',
-        }),
-      );
-    }
-    return updated;
+    throw new ConflictException(
+      this.i18n.t('regularPayment.errors.concurrentUpdate', {
+        defaultValue: 'Regular payment was modified concurrently; please retry',
+      }),
+    );
   }
 
   async remove(userId: string, id: string): Promise<boolean> {

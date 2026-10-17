@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import type { Rate } from '../rate/rate.schema';
 import type { CurrencyDocument } from '../currency/currency.schema';
@@ -8,6 +8,25 @@ import type { MoneyViewDto } from './money.dto';
 
 @Injectable()
 export class MoneyService {
+  private static readonly MAX_SAFE_MINOR = new Decimal(Number.MAX_SAFE_INTEGER);
+
+  /**
+   * Ensure minor units fit in a JS safe integer before persisting / $inc.
+   * Checks the Decimal value before `.toNumber()` so precision is not lost first.
+   */
+  private toSafeMinorNumber(rawMinor: Decimal): number {
+    if (
+      !rawMinor.isInteger() ||
+      rawMinor.abs().greaterThan(MoneyService.MAX_SAFE_MINOR)
+    ) {
+      throw new BadRequestException(
+        'Amount exceeds safe numeric range for the given scale',
+      );
+    }
+
+    return rawMinor.toNumber();
+  }
+
   /**
    * Convert minor units to decimal amount (e.g. 150050 with scale 2 -> 1500.50).
    */
@@ -25,6 +44,7 @@ export class MoneyService {
   /**
    * Convert a decimal amount to integer minor units (e.g. 1500.50 with scale 2 -> 150050).
    * Uses ROUND_HALF_UP to avoid IEEE-754 float drift on values like 19.99.
+   * Rejects results outside Number.MAX_SAFE_INTEGER so Mongo Number/$inc stay exact.
    */
   toMinorUnits(
     amountDecimal: number | string | Decimal,
@@ -32,11 +52,11 @@ export class MoneyService {
   ): number {
     const amount = new Decimal(amountDecimal);
     const factor = new Decimal(10).pow(scale);
-
-    return amount
+    const rawMinor = amount
       .mul(factor)
-      .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
-      .toNumber();
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+
+    return this.toSafeMinorNumber(rawMinor);
   }
 
   /**
@@ -49,9 +69,9 @@ export class MoneyService {
     toScale: number,
   ): number {
     if (fromScale === toScale) {
-      return new Decimal(value)
-        .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
-        .toNumber();
+      return this.toSafeMinorNumber(
+        new Decimal(value).toDecimalPlaces(0, Decimal.ROUND_HALF_UP),
+      );
     }
 
     return this.toMinorUnits(

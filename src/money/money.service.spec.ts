@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 
 import { MoneyService } from './money.service';
@@ -47,6 +48,22 @@ describe('MoneyService', () => {
     expect(service.normalizeMinorUnits(-10000, 3, 2)).toBe(-1000);
     expect(service.normalizeMinorUnits(1999, 2, 2)).toBe(1999);
     expect(service.normalizeMinorUnits(1999, 2, 4)).toBe(199900);
+  });
+
+  it('should reject minor units outside Number.MAX_SAFE_INTEGER', () => {
+    expect(() => service.toMinorUnits(1, 18)).toThrow(BadRequestException);
+    expect(() => service.toMinorUnits(1, 18)).toThrow(
+      'Amount exceeds safe numeric range for the given scale',
+    );
+    expect(() => service.normalizeMinorUnits(1, 0, 18)).toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('should accept minor units at the safe integer boundary', () => {
+    expect(service.toMinorUnits(Number.MAX_SAFE_INTEGER, 0)).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
   });
 
   it('should convert to USD when source is not USD', () => {
