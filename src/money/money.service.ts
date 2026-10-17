@@ -40,6 +40,27 @@ export class MoneyService {
   }
 
   /**
+   * Re-express integer minor units at a different scale, preserving monetary value.
+   * Example: -1000 at scale 2 (=-10.00) -> -10000 at scale 3.
+   */
+  normalizeMinorUnits(
+    value: number,
+    fromScale: number,
+    toScale: number,
+  ): number {
+    if (fromScale === toScale) {
+      return new Decimal(value)
+        .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+        .toNumber();
+    }
+
+    return this.toMinorUnits(
+      this.fromMinorUnitsDecimal(value, fromScale),
+      toScale,
+    );
+  }
+
+  /**
    * Convert amount in source currency to USD using rates (rate = units per 1 USD).
    * Returns null if conversion is not possible.
    */

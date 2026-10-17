@@ -84,10 +84,10 @@ export class TransactionService {
     }
   }
 
-  private async validateAccountBelongsToUser(
+  private async findUserAccount(
     userId: string,
     accountId: string,
-  ): Promise<void> {
+  ): Promise<AccountDocument> {
     const account = await this.accountModel
       .findOne({
         _id: accountId,
@@ -101,6 +101,14 @@ export class TransactionService {
         }),
       );
     }
+    return account;
+  }
+
+  private async validateAccountBelongsToUser(
+    userId: string,
+    accountId: string,
+  ): Promise<void> {
+    await this.findUserAccount(userId, accountId);
   }
 
   private async validateTagsBelongToUser(
@@ -148,7 +156,7 @@ export class TransactionService {
       userId,
       createTransactionDto.category,
     );
-    await this.validateAccountBelongsToUser(
+    const account = await this.findUserAccount(
       userId,
       createTransactionDto.account,
     );
@@ -165,6 +173,11 @@ export class TransactionService {
           createTransactionDto.amount,
           createTransactionDto.scale,
           createTransactionDto.type,
+        );
+        const balanceDelta = this.moneyService.normalizeMinorUnits(
+          amountMinor,
+          createTransactionDto.scale,
+          account.scale,
         );
 
         const transaction = new this.transactionModel({
@@ -189,7 +202,7 @@ export class TransactionService {
               _id: createTransactionDto.account,
               user: new Types.ObjectId(userId),
             },
-            { $inc: { balance: amountMinor } },
+            { $inc: { balance: balanceDelta } },
             { session },
           )
           .exec();
@@ -384,29 +397,42 @@ export class TransactionService {
           : existing.account;
 
         if (options?.recalcBalance) {
-          // Amounts are already signed minor-unit integers
-          const oldSigned = new Decimal(existing.amount);
-          const newSigned = new Decimal(newAmountMinor);
-
           const oldAccountId = existing.account.toString();
           const newAccountIdStr = newAccountId.toString();
+          const oldAccount = await this.findUserAccount(userId, oldAccountId);
+          const newAccount =
+            oldAccountId === newAccountIdStr
+              ? oldAccount
+              : await this.findUserAccount(userId, newAccountIdStr);
+
+          // Express both amounts in each account's own scale before $inc
+          const oldOnOldAccount = this.moneyService.normalizeMinorUnits(
+            existing.amount,
+            existing.scale,
+            oldAccount.scale,
+          );
+          const newOnNewAccount = this.moneyService.normalizeMinorUnits(
+            newAmountMinor,
+            nextScale,
+            newAccount.scale,
+          );
 
           if (oldAccountId !== newAccountIdStr) {
             // Return old amount back to old account
             await this.accountModel.updateOne(
               { _id: existing.account, user: new Types.ObjectId(userId) },
-              { $inc: { balance: oldSigned.neg().toNumber() } },
+              { $inc: { balance: -oldOnOldAccount } },
               { session },
             );
 
             // Apply new amount to new account
             await this.accountModel.updateOne(
               { _id: newAccountId, user: new Types.ObjectId(userId) },
-              { $inc: { balance: newSigned.toNumber() } },
+              { $inc: { balance: newOnNewAccount } },
               { session },
             );
           } else {
-            const diff = newSigned.minus(oldSigned);
+            const diff = new Decimal(newOnNewAccount).minus(oldOnOldAccount);
 
             if (!diff.isZero()) {
               await this.accountModel.updateOne(

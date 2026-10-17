@@ -42,6 +42,13 @@ describe('MoneyService', () => {
     expect(service.toMinorUnits('1.005', 2)).toBe(101);
   });
 
+  it('should normalize minor units between scales without changing value', () => {
+    expect(service.normalizeMinorUnits(-1000, 2, 3)).toBe(-10000);
+    expect(service.normalizeMinorUnits(-10000, 3, 2)).toBe(-1000);
+    expect(service.normalizeMinorUnits(1999, 2, 2)).toBe(1999);
+    expect(service.normalizeMinorUnits(1999, 2, 4)).toBe(199900);
+  });
+
   it('should convert to USD when source is not USD', () => {
     const amount = new Decimal(1000);
     const rates: Rate[] = [{ code: 'EUR', value: 0.8 } as Rate];
