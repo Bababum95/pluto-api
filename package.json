@@ -4,6 +4,7 @@
   "description": "Pluto API",
   "author": "Bababum95 <bababum95@gmail.com>",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
   "license": "MIT",
   "scripts": {
     "dev": "nest start --watch",
