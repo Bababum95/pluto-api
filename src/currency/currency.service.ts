@@ -106,6 +106,7 @@ export class CurrencyService {
         this.i18n.t('currency.errors.sync.failed', {
           args: { errorMessage },
         }) || `Failed to sync currencies: ${errorMessage}`,
+        { cause: error },
       );
     }
   }

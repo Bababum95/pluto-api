@@ -2,10 +2,10 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 
-import { Category, CategoryDocument } from '../category/category.schema';
-import { Account, AccountDocument } from '../account/account.schema';
+import { Category } from '../category/category.schema';
+import { Account } from '../account/account.schema';
 import { Tag } from '../tag/tag.schema';
 import { CategoryService } from '../category/category.service';
 import { AccountService } from '../account/account.service';
@@ -45,16 +45,16 @@ const createChain = (resolvedValue: unknown) => ({
 
 describe('RegularPaymentService', () => {
   let service: RegularPaymentService;
-  let mockRegularPaymentModel: Model<unknown> & {
+  let mockRegularPaymentModel: {
     find: jest.Mock;
     findOne: jest.Mock;
     findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     findOneAndDelete: jest.Mock;
   };
-  let mockCategoryModel: Model<unknown> & { findOne: jest.Mock };
-  let mockAccountModel: Model<unknown> & { findOne: jest.Mock };
-  let mockTagModel: Model<unknown> & { find: jest.Mock };
+  let mockCategoryModel: { findOne: jest.Mock };
+  let mockAccountModel: { findOne: jest.Mock };
+  let mockTagModel: { find: jest.Mock };
   let saveMock: jest.Mock;
 
   const userId = '507f1f77bcf86cd799439011';
@@ -119,7 +119,7 @@ describe('RegularPaymentService', () => {
       this._id = paymentId;
       this.save = saveMock;
       Object.assign(this, dto);
-    } as unknown as Model<unknown> & {
+    } as unknown as {
       find: jest.Mock;
       findOne: jest.Mock;
       findById: jest.Mock;
@@ -246,11 +246,9 @@ describe('RegularPaymentService', () => {
 
     it('should create a regular payment and return populated document', async () => {
       mockCategoryModel.findOne.mockReturnValue(
-        createChain({ _id: categoryId } as unknown as CategoryDocument),
+        createChain({ _id: categoryId }),
       );
-      mockAccountModel.findOne.mockReturnValue(
-        createChain({ _id: accountId } as unknown as AccountDocument),
-      );
+      mockAccountModel.findOne.mockReturnValue(createChain({ _id: accountId }));
       mockRegularPaymentModel.findById.mockReturnValue(
         createChain(mockRegularPayment),
       );

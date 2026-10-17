@@ -6,11 +6,7 @@ import { I18nService } from 'nestjs-i18n';
 
 import { Account } from '../account/account.schema';
 
-import type {
-  CreateTransferDto,
-  UpdateTransferDto,
-  TransferSideDto,
-} from './transfer.dto';
+import type { CreateTransferDto, UpdateTransferDto } from './transfer.dto';
 import { TransferService } from './transfer.service';
 import { Transfer, type TransferDocument } from './transfer.schema';
 
@@ -433,7 +429,7 @@ describe('TransferService', () => {
           account: sameAccount,
           value: 9100,
           scale: 2,
-        } as TransferSideDto,
+        },
       };
 
       await expect(

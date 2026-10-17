@@ -2,7 +2,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { Model, Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { Transaction } from '../transaction/transaction.schema';
 import { Account, AccountDocument } from './account.schema';
@@ -78,7 +78,7 @@ const createChain = (resolvedValue: unknown) => ({
 describe('AccountService', () => {
   let service: AccountService;
   let module: TestingModule;
-  let mockAccountModel: Model<unknown> & {
+  let mockAccountModel: {
     findOne: jest.Mock;
     find: jest.Mock;
     findById: jest.Mock;
@@ -127,7 +127,7 @@ describe('AccountService', () => {
         return this;
       }
       return instance;
-    } as unknown as Model<unknown> & {
+    } as unknown as {
       findOne: jest.Mock;
       find: jest.Mock;
       findById: jest.Mock;
