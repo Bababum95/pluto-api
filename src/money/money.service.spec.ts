@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 
 import { MoneyService } from './money.service';
@@ -21,6 +22,48 @@ describe('MoneyService', () => {
     const result = service.fromMinorUnitsDecimal(150050, 2);
 
     expect(result.equals(new Decimal(1500.5))).toBe(true);
+  });
+
+  it('should convert decimal amount to integer minor units', () => {
+    expect(service.toMinorUnits(1500.5, 2)).toBe(150050);
+    expect(service.toMinorUnits(-1500.5, 2)).toBe(-150050);
+    expect(service.toMinorUnits(0, 2)).toBe(0);
+  });
+
+  it('should avoid float drift when converting common decimal amounts', () => {
+    // Classic IEEE-754 traps: 19.99 * 100 === 1998.999... in plain JS
+    expect(service.toMinorUnits(19.99, 2)).toBe(1999);
+    expect(service.toMinorUnits(0.29, 2)).toBe(29);
+    expect(service.toMinorUnits(1.15, 2)).toBe(115);
+    expect(service.toMinorUnits(1234567.89, 2)).toBe(123456789);
+  });
+
+  it('should round half-up when converting to minor units', () => {
+    expect(service.toMinorUnits('1500.505', 2)).toBe(150051);
+    expect(service.toMinorUnits('1.005', 2)).toBe(101);
+  });
+
+  it('should normalize minor units between scales without changing value', () => {
+    expect(service.normalizeMinorUnits(-1000, 2, 3)).toBe(-10000);
+    expect(service.normalizeMinorUnits(-10000, 3, 2)).toBe(-1000);
+    expect(service.normalizeMinorUnits(1999, 2, 2)).toBe(1999);
+    expect(service.normalizeMinorUnits(1999, 2, 4)).toBe(199900);
+  });
+
+  it('should reject minor units outside Number.MAX_SAFE_INTEGER', () => {
+    expect(() => service.toMinorUnits(1, 18)).toThrow(BadRequestException);
+    expect(() => service.toMinorUnits(1, 18)).toThrow(
+      'Amount exceeds safe numeric range for the given scale',
+    );
+    expect(() => service.normalizeMinorUnits(1, 0, 18)).toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('should accept minor units at the safe integer boundary', () => {
+    expect(service.toMinorUnits(Number.MAX_SAFE_INTEGER, 0)).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
   });
 
   it('should convert to USD when source is not USD', () => {

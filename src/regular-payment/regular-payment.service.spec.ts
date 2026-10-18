@@ -1,4 +1,8 @@
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
@@ -31,6 +35,8 @@ const mockI18nService = {
       'regularPayment.errors.tagNotFound': 'One or more tags not found',
       'regularPayment.create.failed': 'Regular payment creation failed',
       'regularPayment.errors.notFound': 'Regular payment not found',
+      'regularPayment.errors.concurrentUpdate':
+        'Regular payment was modified concurrently; please retry',
     };
     return options?.defaultValue ?? messages[key] ?? key;
   },
@@ -194,6 +200,14 @@ describe('RegularPaymentService', () => {
             fromMinorUnits: jest.fn(
               (raw: number, scale: number) => raw / Math.pow(10, scale),
             ),
+            fromMinorUnitsDecimal: jest.fn((raw: number, scale: number) => ({
+              toNumber: () => raw / Math.pow(10, scale),
+            })),
+            toMinorUnits: jest.fn(
+              (amount: number, scale: number) =>
+                Math.round(Math.abs(amount) * Math.pow(10, scale)) *
+                Math.sign(amount || 1),
+            ),
             convertAmount: jest.fn((_, __, ___, targetCurrency) =>
               targetCurrency
                 ? { value: -1500.5, raw: -150050, scale: 2, currency: {} }
@@ -347,6 +361,9 @@ describe('RegularPaymentService', () => {
 
     it('should update a regular payment and return it', async () => {
       const updated = { ...mockRegularPayment, comment: 'Updated rent' };
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
+      );
       mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
         createChain(updated),
       );
@@ -368,10 +385,120 @@ describe('RegularPaymentService', () => {
       expect(result).toEqual(updated);
     });
 
-    it('should throw NotFoundException when regular payment not found', async () => {
+    it('should convert decimal amount to minor units on update', async () => {
+      const updated = { ...mockRegularPayment, amount: -1999 };
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
+      );
+      mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
+        createChain(updated),
+      );
+
+      await service.update(userId, paymentId.toString(), {
+        amount: -19.99,
+      });
+
+      expect(mockRegularPaymentModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: paymentId.toString(),
+          user: new Types.ObjectId(userId),
+        },
+        { amount: -1999 },
+        { new: true },
+      );
+    });
+
+    it('should optimistic-lock amount/scale/type when deriving amount from existing', async () => {
+      const updated = {
+        ...mockRegularPayment,
+        type: TransactionType.INCOME,
+        amount: 150050,
+      };
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
+      );
+      mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
+        createChain(updated),
+      );
+
+      await service.update(userId, paymentId.toString(), {
+        type: TransactionType.INCOME,
+      });
+
+      expect(mockRegularPaymentModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: paymentId.toString(),
+          user: new Types.ObjectId(userId),
+          amount: mockRegularPayment.amount,
+          scale: mockRegularPayment.scale,
+          type: mockRegularPayment.type,
+        },
+        {
+          type: TransactionType.INCOME,
+          amount: 150050,
+        },
+        { new: true },
+      );
+    });
+
+    it('should retry when concurrent update invalidates optimistic lock', async () => {
+      const afterConcurrent = {
+        ...mockRegularPayment,
+        amount: -2000,
+      };
+      const updated = {
+        ...afterConcurrent,
+        type: TransactionType.INCOME,
+        amount: 2000,
+      };
+
+      mockRegularPaymentModel.findOne
+        .mockReturnValueOnce(createChain(mockRegularPayment))
+        .mockReturnValueOnce(createChain(afterConcurrent));
+      mockRegularPaymentModel.findOneAndUpdate
+        .mockReturnValueOnce(createChain(null))
+        .mockReturnValueOnce(createChain(updated));
+
+      const result = await service.update(userId, paymentId.toString(), {
+        type: TransactionType.INCOME,
+      });
+
+      expect(mockRegularPaymentModel.findOne).toHaveBeenCalledTimes(2);
+      expect(mockRegularPaymentModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
+      expect(mockRegularPaymentModel.findOneAndUpdate).toHaveBeenLastCalledWith(
+        {
+          _id: paymentId.toString(),
+          user: new Types.ObjectId(userId),
+          amount: -2000,
+          scale: afterConcurrent.scale,
+          type: afterConcurrent.type,
+        },
+        {
+          type: TransactionType.INCOME,
+          amount: 2000,
+        },
+        { new: true },
+      );
+      expect(result).toEqual(updated);
+    });
+
+    it('should throw ConflictException after exhausting optimistic retries', async () => {
+      mockRegularPaymentModel.findOne.mockReturnValue(
+        createChain(mockRegularPayment),
+      );
       mockRegularPaymentModel.findOneAndUpdate.mockReturnValue(
         createChain(null),
       );
+
+      await expect(
+        service.update(userId, paymentId.toString(), {
+          type: TransactionType.INCOME,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw NotFoundException when regular payment not found', async () => {
+      mockRegularPaymentModel.findOne.mockReturnValue(createChain(null));
 
       await expect(
         service.update(userId, 'invalid-id', updateDto),

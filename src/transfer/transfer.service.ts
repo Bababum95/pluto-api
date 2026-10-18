@@ -117,17 +117,19 @@ export class TransferService {
     toScale: number,
   ): number {
     const diff = toScale - fromScale;
-
     const decimalValue = new Decimal(value);
 
     if (diff === 0) {
-      return decimalValue.toNumber();
+      return decimalValue.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
     }
 
     const factor = new Decimal(10).pow(Math.abs(diff));
 
     if (diff > 0) {
-      return decimalValue.mul(factor).toNumber();
+      return decimalValue
+        .mul(factor)
+        .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+        .toNumber();
     }
 
     return decimalValue.div(factor).floor().toNumber();

@@ -84,10 +84,10 @@ export class TransactionService {
     }
   }
 
-  private async validateAccountBelongsToUser(
+  private async findUserAccount(
     userId: string,
     accountId: string,
-  ): Promise<void> {
+  ): Promise<AccountDocument> {
     const account = await this.accountModel
       .findOne({
         _id: accountId,
@@ -101,6 +101,14 @@ export class TransactionService {
         }),
       );
     }
+    return account;
+  }
+
+  private async validateAccountBelongsToUser(
+    userId: string,
+    accountId: string,
+  ): Promise<void> {
+    await this.findUserAccount(userId, accountId);
   }
 
   private async validateTagsBelongToUser(
@@ -123,6 +131,23 @@ export class TransactionService {
     }
   }
 
+  /**
+   * Convert a decimal amount to signed integer minor units.
+   * Expense is always negative, income is always positive.
+   */
+  private toSignedMinorUnits(
+    amountDecimal: number,
+    scale: number,
+    type: TransactionType,
+  ): number {
+    const absMinor = this.moneyService.toMinorUnits(
+      Math.abs(amountDecimal),
+      scale,
+    );
+
+    return type === TransactionType.EXPENSE ? -absMinor : absMinor;
+  }
+
   async create(
     userId: string,
     createTransactionDto: CreateTransactionDto,
@@ -131,7 +156,7 @@ export class TransactionService {
       userId,
       createTransactionDto.category,
     );
-    await this.validateAccountBelongsToUser(
+    const account = await this.findUserAccount(
       userId,
       createTransactionDto.account,
     );
@@ -143,13 +168,25 @@ export class TransactionService {
     const session = await this.connection.startSession();
     try {
       const created = await session.withTransaction(async () => {
+        // Store signed integer minor units to avoid float drift on balance $inc
+        const amountMinor = this.toSignedMinorUnits(
+          createTransactionDto.amount,
+          createTransactionDto.scale,
+          createTransactionDto.type,
+        );
+        const balanceDelta = this.moneyService.normalizeMinorUnits(
+          amountMinor,
+          createTransactionDto.scale,
+          account.scale,
+        );
+
         const transaction = new this.transactionModel({
           user: new Types.ObjectId(userId),
           type: createTransactionDto.type,
           category: new Types.ObjectId(createTransactionDto.category),
           comment: createTransactionDto.comment?.trim() ?? '',
           account: new Types.ObjectId(createTransactionDto.account),
-          amount: createTransactionDto.amount,
+          amount: amountMinor,
           scale: createTransactionDto.scale,
           date: createTransactionDto.date,
           tags: (createTransactionDto.tags ?? []).map(
@@ -159,19 +196,13 @@ export class TransactionService {
 
         await transaction.save({ session });
 
-        // Determine signed amount based on transaction type
-        const signedAmount =
-          createTransactionDto.type === TransactionType.EXPENSE
-            ? -createTransactionDto.amount
-            : createTransactionDto.amount;
-
         await this.accountModel
           .updateOne(
             {
               _id: createTransactionDto.account,
               user: new Types.ObjectId(userId),
             },
-            { $inc: { balance: signedAmount } },
+            { $inc: { balance: balanceDelta } },
             { session },
           )
           .exec();
@@ -332,13 +363,33 @@ export class TransactionService {
           updateData.date = updateTransactionDto.date;
         }
 
-        const newAmount =
+        const nextType = updateTransactionDto.type ?? existing.type;
+        const nextScale = updateTransactionDto.scale ?? existing.scale;
+        const newAmountMinor =
           updateTransactionDto.amount !== undefined
-            ? updateTransactionDto.amount
-            : existing.amount;
+            ? this.toSignedMinorUnits(
+                updateTransactionDto.amount,
+                nextScale,
+                nextType,
+              )
+            : updateTransactionDto.type !== undefined ||
+                updateTransactionDto.scale !== undefined
+              ? this.toSignedMinorUnits(
+                  this.moneyService.fromMinorUnits(
+                    existing.amount,
+                    existing.scale,
+                  ),
+                  nextScale,
+                  nextType,
+                )
+              : existing.amount;
 
-        if (updateTransactionDto.amount !== undefined) {
-          updateData.amount = updateTransactionDto.amount;
+        if (
+          updateTransactionDto.amount !== undefined ||
+          updateTransactionDto.type !== undefined ||
+          updateTransactionDto.scale !== undefined
+        ) {
+          updateData.amount = newAmountMinor;
         }
 
         const newAccountId = updateTransactionDto.account
@@ -346,36 +397,42 @@ export class TransactionService {
           : existing.account;
 
         if (options?.recalcBalance) {
-          const oldSigned =
-            existing.type === TransactionType.EXPENSE
-              ? new Decimal(existing.amount).neg()
-              : new Decimal(existing.amount);
-
-          const newSigned =
-            (updateTransactionDto.type ?? existing.type) ===
-            TransactionType.EXPENSE
-              ? new Decimal(newAmount).neg()
-              : new Decimal(newAmount);
-
           const oldAccountId = existing.account.toString();
           const newAccountIdStr = newAccountId.toString();
+          const oldAccount = await this.findUserAccount(userId, oldAccountId);
+          const newAccount =
+            oldAccountId === newAccountIdStr
+              ? oldAccount
+              : await this.findUserAccount(userId, newAccountIdStr);
+
+          // Express both amounts in each account's own scale before $inc
+          const oldOnOldAccount = this.moneyService.normalizeMinorUnits(
+            existing.amount,
+            existing.scale,
+            oldAccount.scale,
+          );
+          const newOnNewAccount = this.moneyService.normalizeMinorUnits(
+            newAmountMinor,
+            nextScale,
+            newAccount.scale,
+          );
 
           if (oldAccountId !== newAccountIdStr) {
             // Return old amount back to old account
             await this.accountModel.updateOne(
               { _id: existing.account, user: new Types.ObjectId(userId) },
-              { $inc: { balance: oldSigned.neg().toNumber() } },
+              { $inc: { balance: -oldOnOldAccount } },
               { session },
             );
 
             // Apply new amount to new account
             await this.accountModel.updateOne(
               { _id: newAccountId, user: new Types.ObjectId(userId) },
-              { $inc: { balance: newSigned.toNumber() } },
+              { $inc: { balance: newOnNewAccount } },
               { session },
             );
           } else {
-            const diff = newSigned.minus(oldSigned);
+            const diff = new Decimal(newOnNewAccount).minus(oldOnOldAccount);
 
             if (!diff.isZero()) {
               await this.accountModel.updateOne(
@@ -461,12 +518,12 @@ export class TransactionService {
       );
     }
 
-    const value = this.moneyService.fromMinorUnits(
+    const amountDecimal = this.moneyService.fromMinorUnitsDecimal(
       transaction.amount,
       transaction.scale,
     );
     const moneyOriginal: MoneyViewDto = {
-      value,
+      value: amountDecimal.toNumber(),
       raw: transaction.amount,
       scale: transaction.scale,
       currency: {
@@ -478,7 +535,7 @@ export class TransactionService {
     };
 
     const converted = this.moneyService.convertAmount(
-      new Decimal(value),
+      amountDecimal,
       account.balance.original.currency.code,
       options.rates,
       options.settings?.currency,
