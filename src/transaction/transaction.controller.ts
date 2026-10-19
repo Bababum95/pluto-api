@@ -65,10 +65,12 @@ export class TransactionController {
       user.userId,
       createTransactionDto,
     );
+
     const account = await this.accountService.findOne(
       user.userId,
       transaction.account._id.toString(),
     );
+
     const summary = await this.accountService.getSummary(user.userId);
     const settings = await this.settingsService.findByUserId(user.userId);
     const rates = await this.rateService.getLatestValidRate();

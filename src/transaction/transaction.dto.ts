@@ -109,8 +109,8 @@ export class CreateTransactionDto {
   account: string;
 
   @ApiProperty({
-    example: -1500.5,
-    description: 'Amount (decimal). Negative for expense, positive for income.',
+    example: 1500,
+    description: 'Amount ',
   })
   @Type(() => Number)
   @IsNumber()

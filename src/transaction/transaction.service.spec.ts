@@ -145,7 +145,9 @@ describe('TransactionService', () => {
       findOne: jest.fn().mockReturnValue(createChain({ _id: categoryId })),
     };
     mockAccountModel = {
-      findOne: jest.fn().mockReturnValue(createChain({ _id: accountId })),
+      findOne: jest
+        .fn()
+        .mockReturnValue(createChain({ _id: accountId, scale: 2 })),
       updateOne: jest.fn().mockReturnValue(createChain({ modifiedCount: 1 })),
     };
     mockTagModel = {
@@ -268,7 +270,9 @@ describe('TransactionService', () => {
     jest.clearAllMocks();
 
     mockCategoryModel.findOne.mockReturnValue(createChain({ _id: categoryId }));
-    mockAccountModel.findOne.mockReturnValue(createChain({ _id: accountId }));
+    mockAccountModel.findOne.mockReturnValue(
+      createChain({ _id: accountId, scale: 2 }),
+    );
     mockTransactionModel.findOne.mockReturnValue(createChain(null));
     mockTransactionModel.find.mockReturnValue(createChain([]));
     mockTransactionModel.findById.mockReturnValue(
@@ -313,6 +317,30 @@ describe('TransactionService', () => {
       expect(result).toEqual(mockTransactionPopulated);
     });
 
+    it('converts the amount to the account scale within the session', async () => {
+      const accountQuery = createChain({ _id: accountId, scale: 2 });
+      mockAccountModel.findOne.mockReturnValue(accountQuery);
+
+      await service.create(userId, {
+        type: TransactionType.EXPENSE,
+        category: categoryId.toString(),
+        account: accountId.toString(),
+        amount: 23,
+        scale: 0,
+        date: '2024-01-15',
+      });
+
+      expect(accountQuery.session).toHaveBeenCalled();
+      const session: unknown = (
+        accountQuery.session.mock.calls as unknown[][]
+      )[0][0];
+      expect(mockAccountModel.updateOne).toHaveBeenCalledWith(
+        { _id: accountId.toString(), user: new Types.ObjectId(userId) },
+        { $inc: { balance: -2300 } },
+        { session },
+      );
+    });
+
     it('should throw BadRequestException when category not found', async () => {
       mockCategoryModel.findOne.mockReturnValue(createChain(null));
 
@@ -351,6 +379,164 @@ describe('TransactionService', () => {
       await expect(service.create(userId, createDto)).rejects.toThrow(
         'Account not found',
       );
+    });
+  });
+
+  describe('calculation audit', () => {
+    it.each([
+      [TransactionType.EXPENSE, 23, 0, 2, -2300],
+      [TransactionType.INCOME, 23, 0, 2, 2300],
+      [TransactionType.EXPENSE, 1005, 3, 2, -101],
+      [TransactionType.INCOME, 1004, 3, 2, 100],
+      [TransactionType.EXPENSE, 23, 2, 0, -0],
+      [TransactionType.INCOME, 0, 2, 2, 0],
+      [TransactionType.EXPENSE, -23, 0, 2, -2300],
+    ])(
+      'create %s raw=%s scale=%s accountScale=%s yields %s',
+      async (type, amount, scale, accountScale, expected) => {
+        mockAccountModel.findOne.mockReturnValue(
+          createChain({ _id: accountId, scale: accountScale }),
+        );
+        await service.create(userId, {
+          type,
+          amount,
+          scale,
+          category: categoryId.toString(),
+          account: accountId.toString(),
+          date: '2024-01-15',
+        });
+        const calls = mockAccountModel.updateOne.mock.calls as unknown[][];
+        expect(
+          (calls[0][1] as { $inc: { balance: number } }).$inc.balance,
+        ).toBe(expected);
+      },
+    );
+
+    it.each([
+      ['amount and scale', 23, 0, { amount: 2500, scale: 2 }, -200],
+      ['scale only', 2300, 2, { scale: 3 }, 2070],
+      ['negative expense', -2300, 2, { amount: -2500 }, -200],
+      ['equivalent representations', 23, 0, { amount: 2300, scale: 2 }, 0],
+    ] as const)(
+      'update recalculates %s in account minor units',
+      async (_name, amount, scale, changes, expected) => {
+        mockTransactionModel.findOne.mockReturnValue(
+          createChain({ ...mockTransaction, amount, scale }),
+        );
+        await service.update(userId, transactionId.toString(), changes, {
+          recalcBalance: true,
+        });
+        const calls = mockAccountModel.updateOne.mock.calls as unknown[][];
+        const increment = calls.reduce(
+          (sum, call) =>
+            sum + (call[1] as { $inc: { balance: number } }).$inc.balance,
+          0,
+        );
+        expect(increment).toBe(expected);
+      },
+    );
+  });
+
+  describe('balance recalculation', () => {
+    it.each([
+      [TransactionType.EXPENSE, TransactionType.INCOME, 4600],
+      [TransactionType.INCOME, TransactionType.EXPENSE, -4600],
+    ])(
+      'handles a type change from %s to %s',
+      async (oldType, type, expected) => {
+        mockTransactionModel.findOne.mockReturnValue(
+          createChain({ ...mockTransaction, type: oldType, amount: 2300 }),
+        );
+        await service.update(
+          userId,
+          transactionId.toString(),
+          { type },
+          { recalcBalance: true },
+        );
+        const calls = mockAccountModel.updateOne.mock.calls as unknown[][];
+        expect(
+          (calls[0][1] as { $inc: { balance: number } }).$inc.balance,
+        ).toBe(expected);
+      },
+    );
+
+    it('reverses and applies an expense using each account scale', async () => {
+      const otherAccountId = new Types.ObjectId();
+      mockTransactionModel.findOne.mockReturnValue(
+        createChain({ ...mockTransaction, amount: -2300, scale: 2 }),
+      );
+      mockAccountModel.findOne.mockImplementation(
+        (filter: { _id: Types.ObjectId | string }) =>
+          createChain({
+            _id: filter._id,
+            scale: filter._id.toString() === accountId.toString() ? 2 : 0,
+          }),
+      );
+      await service.update(
+        userId,
+        transactionId.toString(),
+        { account: otherAccountId.toString(), amount: 25, scale: 0 },
+        { recalcBalance: true },
+      );
+      const calls = mockAccountModel.updateOne.mock.calls as unknown[][];
+      expect(calls).toHaveLength(2);
+      expect(calls[0][0]).toEqual({
+        _id: accountId,
+        user: new Types.ObjectId(userId),
+      });
+      expect(calls[0][1]).toEqual({ $inc: { balance: 2300 } });
+      expect(calls[1][0]).toEqual({
+        _id: otherAccountId,
+        user: new Types.ObjectId(userId),
+      });
+      expect(calls[1][1]).toEqual({ $inc: { balance: -25 } });
+    });
+
+    it('rounds each amount before subtracting the old balance effect', async () => {
+      mockTransactionModel.findOne.mockReturnValue(
+        createChain({ ...mockTransaction, amount: 1004, scale: 3 }),
+      );
+      await service.update(
+        userId,
+        transactionId.toString(),
+        { amount: 1005 },
+        { recalcBalance: true },
+      );
+      const calls = mockAccountModel.updateOne.mock.calls as unknown[][];
+      expect(calls[0][1]).toEqual({ $inc: { balance: -1 } });
+    });
+
+    it.each([undefined, false])(
+      'leaves balance unchanged with recalcBalance=%s',
+      async (recalcBalance) => {
+        mockTransactionModel.findOne.mockReturnValue(
+          createChain(mockTransaction),
+        );
+        await service.update(
+          userId,
+          transactionId.toString(),
+          { amount: 5000, scale: 0 },
+          { recalcBalance },
+        );
+        expect(mockAccountModel.updateOne).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects a missing account before modifying the balance or transaction', async () => {
+      mockTransactionModel.findOne.mockReturnValue(
+        createChain(mockTransaction),
+      );
+      mockAccountModel.findOne.mockReturnValue(createChain(null));
+      await expect(
+        service.update(
+          userId,
+          transactionId.toString(),
+          { amount: 5000 },
+          { recalcBalance: true },
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAccountModel.updateOne).not.toHaveBeenCalled();
+      expect(mockTransactionModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
   });
 

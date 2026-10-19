@@ -131,18 +131,32 @@ export class TransactionService {
       userId,
       createTransactionDto.category,
     );
-    await this.validateAccountBelongsToUser(
-      userId,
-      createTransactionDto.account,
-    );
+
     await this.validateTagsBelongToUser(
       userId,
       createTransactionDto.tags ?? [],
     );
 
     const session = await this.connection.startSession();
+
     try {
       const created = await session.withTransaction(async () => {
+        const account = await this.accountModel
+          .findOne({
+            _id: createTransactionDto.account,
+            user: new Types.ObjectId(userId),
+          })
+          .session(session)
+          .exec();
+
+        if (!account) {
+          throw new BadRequestException(
+            this.i18n.t('transaction.errors.accountNotFound', {
+              defaultValue: 'Account not found',
+            }),
+          );
+        }
+
         const transaction = new this.transactionModel({
           user: new Types.ObjectId(userId),
           type: createTransactionDto.type,
@@ -159,11 +173,21 @@ export class TransactionService {
 
         await transaction.save({ session });
 
+        const amount = this.moneyService.fromMinorUnitsDecimal(
+          createTransactionDto.amount,
+          createTransactionDto.scale,
+        );
+
+        const { rawMinor } = this.moneyService.roundToScale(
+          amount,
+          account.scale,
+        );
+
         // Determine signed amount based on transaction type
         const signedAmount =
           createTransactionDto.type === TransactionType.EXPENSE
-            ? -createTransactionDto.amount
-            : createTransactionDto.amount;
+            ? -Math.abs(rawMinor)
+            : Math.abs(rawMinor);
 
         await this.accountModel
           .updateOne(
@@ -346,19 +370,58 @@ export class TransactionService {
           : existing.account;
 
         if (options?.recalcBalance) {
-          const oldSigned =
-            existing.type === TransactionType.EXPENSE
-              ? new Decimal(existing.amount).neg()
-              : new Decimal(existing.amount);
-
-          const newSigned =
-            (updateTransactionDto.type ?? existing.type) ===
-            TransactionType.EXPENSE
-              ? new Decimal(newAmount).neg()
-              : new Decimal(newAmount);
-
           const oldAccountId = existing.account.toString();
           const newAccountIdStr = newAccountId.toString();
+          const oldAccount = await this.accountModel
+            .findOne({
+              _id: existing.account,
+              user: new Types.ObjectId(userId),
+            })
+            .session(session)
+            .exec();
+          const newAccount =
+            oldAccountId === newAccountIdStr
+              ? oldAccount
+              : await this.accountModel
+                  .findOne({
+                    _id: newAccountId,
+                    user: new Types.ObjectId(userId),
+                  })
+                  .session(session)
+                  .exec();
+
+          if (!oldAccount || !newAccount) {
+            throw new BadRequestException(
+              this.i18n.t('transaction.errors.accountNotFound', {
+                defaultValue: 'Account not found',
+              }),
+            );
+          }
+
+          const oldRaw = this.moneyService.roundToScale(
+            this.moneyService
+              .fromMinorUnitsDecimal(existing.amount, existing.scale)
+              .abs(),
+            oldAccount.scale,
+          ).rawMinor;
+          const newRaw = this.moneyService.roundToScale(
+            this.moneyService
+              .fromMinorUnitsDecimal(
+                newAmount,
+                updateTransactionDto.scale ?? existing.scale,
+              )
+              .abs(),
+            newAccount.scale,
+          ).rawMinor;
+          const oldSigned = new Decimal(oldRaw).mul(
+            existing.type === TransactionType.EXPENSE ? -1 : 1,
+          );
+          const newSigned = new Decimal(newRaw).mul(
+            (updateTransactionDto.type ?? existing.type) ===
+              TransactionType.EXPENSE
+              ? -1
+              : 1,
+          );
 
           if (oldAccountId !== newAccountIdStr) {
             // Return old amount back to old account
